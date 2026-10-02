@@ -15,8 +15,10 @@ import subprocess
 import sys
 from pathlib import Path
 
-REPO_URL = ""                       # e.g. https://github.com/<user>/<repo>.git
-REPO_DIR = Path("/kaggle/working/fl-sentiment")
+REPO_URL = os.environ.get("REPO_URL", "")
+REPO_DIR = Path(
+    os.environ.get("REPO_DIR", "/kaggle/working/fl-sentiment")
+)
 STAGE = os.environ.get("FL_STAGE", "bringup")
 
 
