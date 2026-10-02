@@ -98,5 +98,10 @@ Diagnostic definition (made on a synthetic fixture, before any real data):
   `raw_only` flag.
 * **Dataset pin (A11).** `data.revision` set for Yelp. The data fingerprint
   of the laptop subset is unchanged by the pin.
+* **Experiment 0A tuning completed (A8, A12).** Official Kaggle validation-only
+  tuning selected `fl.lr = 0.3` and `fl.weight_decay = 1e-6`, with both values
+  at their predefined grid boundaries. The grid was not expanded. The frozen
+  config records the clean Kaggle commit and tuning CSV hash; no official 0A
+  result existed when this entry was made.
 * Not done: the Kaggle environment report is still not in the repository, so
   `ENVIRONMENT.md` section 1 remains empty.

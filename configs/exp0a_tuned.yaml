@@ -1,0 +1,19 @@
+# Written from the official Kaggle Experiment 0A tuning artifacts.
+# The selected values are frozen; do not edit by hand.
+inherits: exp0a.yaml
+
+fl:
+  lr: 0.3
+  weight_decay: 0.000001
+
+protocol:
+  frozen: true
+  tuning:
+    selected:
+      lr: 0.3
+      weight_decay: 0.000001
+    official_environment: true
+    tuning_csv_sha256: 4ab59ffa863181be10cc11e9fb1d0fa04dd6775af1e29c71e7e79687c4f405d6
+    git_commits:
+    - 560f3ca06f319f6e33f1111cdd1e268210dee552
+    tuning_seed: 7
