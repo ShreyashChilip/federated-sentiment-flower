@@ -66,6 +66,14 @@ def official_preconditions(cfg: dict, environment: dict, seeds: list[int]) -> li
     protocol = cfg.get("protocol", {})
     if not protocol.get("frozen"):
         problems.append("protocol.frozen is false: the hyperparameters marked PROVISIONAL in the config have not been approved")
+    if protocol.get("requires_tuning"):
+        tuning = protocol.get("tuning") or {}
+        if not tuning.get("selected"):
+            problems.append("no tuning result in the config: run experiments/exp0a_tune.py and use the tuned config it writes")
+        elif not tuning.get("official_environment"):
+            problems.append("the tuning recorded in the config was not run in the official environment")
+        elif any(cfg["fl"].get(k) != v for k, v in tuning["selected"].items()):
+            problems.append("fl.lr / fl.weight_decay differ from the values selected by the tuning pass")
     want = protocol.get("required_seed_count")
     official = cfg["experiment"].get("seeds") or []
     if want and len(official) != want:
@@ -259,27 +267,70 @@ def aggregate(exp_dir, cells: list[str]) -> dict:
     return out
 
 
-def decision_rule_0a(summary: dict, skew_cell: str, control_cell: str = "iid", margin: float = 0.10) -> dict:
-    """Mechanical evaluation of the decision rule frozen in EXPERIMENT_PLAN.md section 5.
+def _criterion(skew: dict, ctrl: dict, n_seeds: int, margin: float) -> dict:
+    """One correlation statistic: same non-zero sign in every seed, and excess over the IID control."""
+    vals = skew["per_seed"]
+    complete = len(vals) == n_seeds
+    same_sign = complete and (all(v > 0 for v in vals) or all(v < 0 for v in vals))
+    mean_abs = float(np.mean(np.abs(vals))) if complete else None
+    # In the control cell an undefined value (no residual variation) counts as 0.
+    ctrl_abs = float(np.sum(np.abs(ctrl["per_seed"])) / n_seeds)
+    excess = None if mean_abs is None else mean_abs - ctrl_abs
+    return {
+        "defined_in_all_seeds": complete, "same_sign_all_seeds": bool(same_sign),
+        "sign": (1 if vals[0] > 0 else -1) if same_sign else 0,
+        "mean_abs_skew": mean_abs, "mean_abs_control": ctrl_abs, "excess": excess,
+        "passed": bool(same_sign and excess is not None and excess >= margin),
+    }
 
-    An effect is declared for a condition only if the Spearman correlation of
-    coefficient bias with label exposure under the skewed partition has the
-    same sign in every seed AND its mean absolute value exceeds the IID
-    control's mean absolute value by at least ``margin``. This describes label
-    heterogeneity only; it is not evidence about natural-client confounding.
+
+def decision_rule_0a(summary: dict, skew_cell: str, control_cell: str = "iid", margin: float = 0.10) -> dict:
+    """Mechanical evaluation of the 0A decision rule (EXPERIMENT_PLAN.md, amendment A9).
+
+    For each federated condition, over the supported features and the official seeds:
+
+      raw criterion      Spearman correlation of coefficient bias with label
+                         exposure in the skewed cell has the same non-zero sign
+                         in every seed, and its mean absolute value exceeds the
+                         IID control's by at least ``margin``;
+      control criterion  the partial Pearson correlation of bias with exposure,
+                         controlling for the centralized coefficient, is defined
+                         in every seed, has the same non-zero sign in every seed,
+                         and its mean absolute value exceeds the IID control's by
+                         at least ``margin``;
+      effect             raw AND control, with the two signs equal.
+
+    The raw criterion alone is not sufficient: an under-trained federated model
+    satisfies it without any client effect. Outcome: A if FedAvg shows no
+    effect; B if FedAvg shows an effect and the label-prior correction does
+    not; C if both show an effect. This concerns ordinary label heterogeneity
+    only; it is not evidence about natural-client confounding.
     """
-    out = {}
+    out = {"margin": margin, "conditions": {}}
     for cond in FEDERATED:
         try:
-            skew = summary["cells"][skew_cell]["bias_vs_exposure"][cond]["spearman"]
-            ctrl = summary["cells"][control_cell]["bias_vs_exposure"][cond]["spearman"]
+            skew = summary["cells"][skew_cell]["bias_vs_exposure"][cond]
+            ctrl = summary["cells"][control_cell]["bias_vs_exposure"][cond]
+            n_seeds = len(summary["cells"][skew_cell]["seeds"])
         except KeyError:
-            out[cond] = {"evaluated": False}
+            out["conditions"][cond] = {"evaluated": False, "effect_declared": False}
             continue
-        excess = None if skew["mean_abs"] is None or ctrl["mean_abs"] is None else skew["mean_abs"] - ctrl["mean_abs"]
-        out[cond] = {
-            "evaluated": True, "same_sign_all_seeds": skew["same_sign_all_seeds"],
-            "mean_abs_skew": skew["mean_abs"], "mean_abs_control": ctrl["mean_abs"], "excess": excess,
-            "effect_declared": bool(skew["same_sign_all_seeds"] and excess is not None and excess >= margin),
+        raw = _criterion(skew["spearman"], ctrl["spearman"], n_seeds, margin)
+        control = _criterion(skew["partial_pearson"], ctrl["partial_pearson"], n_seeds, margin)
+        effect = raw["passed"] and control["passed"] and raw["sign"] == control["sign"]
+        out["conditions"][cond] = {
+            "evaluated": True, "n_seeds": n_seeds, "raw_spearman": raw, "partial_pearson": control,
+            "effect_declared": bool(effect),
+            "raw_only": bool(raw["passed"] and not effect),
         }
+    conds = out["conditions"]
+    if all(c.get("evaluated") for c in conds.values()):
+        if not conds["fedavg"]["effect_declared"]:
+            out["outcome"] = "A"
+        elif not conds["fedavg_la"]["effect_declared"]:
+            out["outcome"] = "B"
+        else:
+            out["outcome"] = "C"
+    else:
+        out["outcome"] = None
     return out

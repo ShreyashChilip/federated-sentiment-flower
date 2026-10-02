@@ -152,10 +152,120 @@ points are numbered as in `docs/PHASE_0_TO_PHASE_1_AUDIT.md`, section 8.
 | A5 | 2026-10-02 | Pilot runs (seed 0, a few rounds) are allowed before official runs for timing and plumbing. Pilot outputs may not change the protocol | Author instruction | No | In force |
 | A6 | 2026-10-02 | Definition of "candidate client-confounded feature" and of the seen/unseen-client measurements fixed in `docs/CONFOUNDING_DIAGNOSTIC.md` | Preparation work, before any real data was loaded | No | In force |
 
-Not amended, although the audit found problems (they need the authors' decision):
+Listed in the first version of this section as open; all three were decided on 2026-10-02 (A8 to A11 below):
 
 * The Dirichlet redraw rule of section 2 cannot be satisfied for N = 100,
   alpha = 0.1 (audit M1, decision D2).
 * The 0A decision rule of section 5 uses the raw Spearman correlation, which
   responds to under-training (audit M4, decision D9).
 * `weight_decay` is 0 (audit M5, decision D3).
+
+### Amendments approved by the authors on 2026-10-02 (no official result existed)
+
+| # | Amendment | Replaces |
+|---|---|---|
+| A7 | The official seeds are **42, 123, 456, 789, 1001, 2024, 31415, 271828** (8 seeds), for Experiment 0 and every later experiment. Seed 0 is reserved for pilots and seed 7 for tuning; neither is an official seed | Section 2 "Seeds" (five seeds incl. 2026); amendment A2 |
+| A8 | Validation-only tuning before the official 0A run; protocol in section 10 | Section 4 for Experiment 0A only |
+| A9 | 0A decision rule: section 11. The raw Spearman correlation alone is not sufficient | Section 5, "Decision rule" |
+| A10 | Core 0A partition: `dirichlet_client`, exactly 100 equal-size clients, alpha = 0.1 acting on label composition only; algorithm in section 12. Unequal client sizes are a separate later sensitivity experiment (Phase 3, `quantity_skew`) | Section 2 "Non-IID recipe" and its redraw rule, for Experiment 0A |
+| A11 | The Yelp dataset is pinned to Hugging Face revision `bbf1c97a1f0cf005e5aded43839fd814654a1557` of `fancyzhx/yelp_polarity` | Section 2, unpinned dataset |
+| A12 | A fixed, non-zero weight decay chosen by the tuning pass is used identically in all three conditions; the centralized model trains for ceil(rounds x C x E) = 13 epochs, the same number of passes over the training rows as the federated runs | `weight_decay: 0`; centralized epochs "PROVISIONAL" |
+
+## 10. Tuning protocol for Experiment 0A (amendment A8)
+
+Fixed a priori and **not** tuned: features (50,000 TF-IDF terms, unigrams and
+bigrams, min_df 5, sublinear tf), N = 100, C = 0.25, E = 1, 50 rounds, batch
+size 32, SGD without momentum, no learning-rate decay, server learning rate 1.
+
+Tuned: local learning rate in {0.03, 0.1, 0.3} and weight decay in
+{1e-6, 1e-5, 1e-4}; 9 runs.
+
+* Run: FedAvg on the label-skew cell (`dirichlet_client`, alpha = 0.1,
+  N = 100) with tuning seed 7. That seed has its own partition; no official
+  partition and no official seed is used.
+* Criterion: pooled validation macro-F1 after round 50. Ties: smaller learning
+  rate, then larger weight decay.
+* The test split is never evaluated in a tuning run (`eval.test: false`); the
+  selection code refuses to proceed if a tuning run contains a test metric.
+* No diagnostic (coefficient bias, exposure, any correlation) is computed
+  during tuning.
+* The selected pair is used unchanged by centralized, FedAvg and FedAvg with
+  label-prior correction. Only the baseline is tuned; the correction adds no
+  hyperparameter.
+* If the selected value lies on the edge of the grid this is recorded in
+  `selected.json`. The grid is not extended without a dated CHANGELOG entry.
+* Output: `results/exp0a_tuning/` (`tuning.csv`, `selected.json`,
+  `exp0a_tuned.yaml`). The tuned config is copied to `configs/exp0a_tuned.yaml`
+  and committed; it sets `protocol.frozen: true` only if the tuning pass ran on
+  Kaggle from a clean commit. The official run checks that the learning rate
+  and weight decay in use equal the selected ones.
+
+## 11. Decision rule for Experiment 0A (amendment A9)
+
+Quantities, per federated condition c in {FedAvg, FedAvg + label-prior
+correction}, per cell (label-skew, IID control) and per official seed s, over
+the features with training-role document frequency >= 50:
+
+* B_j = w_c,j - w_central,j (coefficient bias), X_j = client label exposure;
+* rho_S = Spearman correlation of B_j with X_j;
+* rho_P = partial Pearson correlation of B_j with X_j controlling for
+  w_central,j (correlation of the two residuals after a linear fit on
+  w_central,j). rho_P is undefined when either residual has no variation.
+
+**Raw criterion R(c):** rho_S in the label-skew cell has the same non-zero
+sign in all 8 seeds, and mean_s |rho_S(label-skew)| - mean_s |rho_S(IID)| >= 0.10.
+
+**Control criterion P(c):** rho_P in the label-skew cell is defined in all 8
+seeds, has the same non-zero sign in all 8 seeds, and
+mean_s |rho_P(label-skew)| - mean_s |rho_P(IID)| >= 0.10, where an undefined
+rho_P in the IID cell counts as 0.
+
+**Effect(c)** = R(c) and P(c) and sign(rho_S) = sign(rho_P).
+
+Outcomes:
+
+* **A**: not Effect(FedAvg). No demonstrated coefficient distortion beyond
+  what the centralized coefficients explain. If R(FedAvg) holds but P(FedAvg)
+  does not, this is reported as "raw association not robust to the control",
+  which is what under-training alone produces.
+* **B**: Effect(FedAvg) and not Effect(FedAvg + correction). The label-prior
+  correction removes the distortion.
+* **C**: Effect(FedAvg) and Effect(FedAvg + correction).
+
+With 8 seeds, "same sign in all seeds" has probability 2/256 = 0.0078 under a
+symmetric null. Whatever the outcome, 0A concerns ordinary label
+heterogeneity under a synthetic partition and is not evidence about
+natural-client lexical confounding. The rule is implemented in
+`src/analysis/exp0.py::decision_rule_0a` and unit-tested.
+
+## 12. Partition algorithm `dirichlet_client/v1` (amendment A10)
+
+Inputs: training labels y (all rows of the official training split), number
+of clients N, concentration alpha, partition seed
+p = derive_seed("partition", experiment seed). One NumPy `default_rng(p)`
+stream is used, in this order:
+
+1. For each class c in increasing order: pool_c = a random permutation of the
+   row indices with label c.
+2. order = a random permutation of the client ids 0..N-1.
+3. Sizes: every client gets floor(n / N) rows; the first (n mod N) clients in
+   `order` get one more.
+4. For each client k in `order`:
+   a. draw q_k ~ Dirichlet(alpha, ..., alpha) over the classes;
+   b. need = size_k; take = 0 for every class;
+   c. while need > 0: let w = q_k restricted to classes that still have unused
+      rows, renormalized (uniform over those classes if all such q are 0);
+      draw counts ~ Multinomial(need, w); cap each count at the class's unused
+      rows; add to take; subtract the capped total from need;
+   d. client k receives the next take_c unused rows of pool_c for every c;
+      the indices are stored sorted.
+
+Properties: every row is assigned to exactly one client; no client is empty;
+client sizes differ by at most one row; no rejection step. Known artifact:
+clients late in `order` are limited by what remains in the pools and are
+closer to the leftover class mix than to their own q_k.
+
+Recorded with every partition: scheme, algorithm identifier
+(`dirichlet_client/v1`), alpha, N, experiment seed, partition seed, per-client
+size, per-client realized class counts, per-client role counts, and the
+SHA-256 over all client index arrays. The hash is checked on every load.

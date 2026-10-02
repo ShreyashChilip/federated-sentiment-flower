@@ -141,6 +141,8 @@ def run_server(grid: Grid, run_dir) -> dict:
     val_rows = rt.pooled_rows("val")
     x_val, y_val = rt.bundle.x_train[val_rows], rt.bundle.y_train[val_rows]
     eval_every = int(cfg["eval"].get("every", 1))
+    # Tuning runs set eval.test to false: the test split is then never evaluated.
+    use_test = bool(cfg["eval"].get("test", True))
     rounds = int(fl["rounds"])
     history: list[dict] = []
     totals = {"client_wall_s": 0.0, "client_cpu_s": 0.0, "client_gpu_s": 0.0, "agg_wall_s": 0.0,
@@ -204,8 +206,10 @@ def run_server(grid: Grid, run_dir) -> dict:
             row["max_c_local_norm"] = max((float(m["c_local_norm"]) for m in metrics), default=0.0)
         if rnd % eval_every == 0 or rnd == rounds:
             val = evaluate_weights(model, state.weights, x_val, y_val, num_classes, device)
-            test = evaluate_weights(model, state.weights, rt.bundle.x_test, rt.bundle.y_test, num_classes, device)
-            for name, out in (("val", val), ("test", test)):
+            outs = [("val", val)]
+            if use_test:
+                outs.append(("test", evaluate_weights(model, state.weights, rt.bundle.x_test, rt.bundle.y_test, num_classes, device)))
+            for name, out in outs:
                 for key in ("loss", "accuracy", "macro_f1", "macro_precision", "macro_recall"):
                     row[f"{name}_{key}"] = out[key]
         row["round_wall_s"] = time.perf_counter() - t_round
@@ -213,7 +217,7 @@ def run_server(grid: Grid, run_dir) -> dict:
 
     # ---- final evaluation ---------------------------------------------------
     final_val = evaluate_weights(model, state.weights, x_val, y_val, num_classes, device)
-    final_test = evaluate_weights(model, state.weights, rt.bundle.x_test, rt.bundle.y_test, num_classes, device)
+    final_test = evaluate_weights(model, state.weights, rt.bundle.x_test, rt.bundle.y_test, num_classes, device) if use_test else {}
     per_client = federated_evaluation(grid, node_of, state.weights, run_dir, "final_eval", ledger, num_classes)
     for row in per_client:
         row["n_train"] = n_train[row["client_id"]]
@@ -226,6 +230,7 @@ def run_server(grid: Grid, run_dir) -> dict:
         "seed": seed,
         "rounds": rounds,
         "test": final_test,
+        "test_evaluated": use_test,
         "val": final_val,
         "client_test_macro_f1": client_dispersion([r.get("client_test_macro_f1") for r in per_client]),
         "client_test_accuracy": client_dispersion([r.get("client_test_accuracy") for r in per_client]),

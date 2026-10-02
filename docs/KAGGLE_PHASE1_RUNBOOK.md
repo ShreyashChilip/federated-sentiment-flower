@@ -9,23 +9,25 @@ Nothing here has been executed on Kaggle by the preparation work.
 | Step | What it is | Scientific result? |
 |---|---|---|
 | 1 | Environment verification | No |
-| 2 | Experiment 0A pilot | No (timing and plumbing; seed 0 is not an official seed) |
-| 3 | Experiment 0A full run | **Yes. This is the first scientific run.** |
-| 4 | Experiment 0B client profiling | Descriptive data statistics; no model |
-| 5 | Experiment 0B training | Yes |
+| 2 | Experiment 0A pilot | No (timing and plumbing; seed 0) |
+| 3 | Experiment 0A tuning | No (validation data only; seed 7; test split never evaluated) |
+| 4 | Experiment 0A full run, 8 seeds | **Yes. This is the first scientific run.** |
+| 5 | Experiment 0B client profiling | Descriptive data statistics; no model |
+| 6 | Experiment 0B training | Yes |
 
-## Before step 3: blockers
+## What is already fixed, and what blocks step 4
 
-Step 3 refuses to start until all of these are committed (the script prints
-the unmet ones):
+Fixed and committed: the 8 seeds, the Yelp revision, the `dirichlet_client`
+partition, the tuning protocol, the decision rule, all non-tuned
+hyperparameters (`configs/exp0a.yaml`).
 
-1. `configs/base.yaml`: `experiment.seeds` holds the 8 official seeds.
-2. `configs/base.yaml`: `data.revision` holds the Yelp dataset commit.
-3. `configs/exp0a.yaml`: the `label_skew` cell is feasible (decision D2 in
-   `PHASE_0_TO_PHASE_1_AUDIT.md`); with the current frozen rule partition
-   creation fails for N = 100, alpha = 0.1.
-4. `configs/exp0a.yaml`: PROVISIONAL values approved and `protocol.frozen: true`.
-5. `CHANGELOG.md`: one dated entry per decision.
+Step 4 refuses to start until:
+
+1. the Kaggle environment report from step 1 is committed (`ENVIRONMENT.md`
+   section 1);
+2. step 3 has been run on Kaggle from a clean commit, and the file it writes
+   has been committed as `configs/exp0a_tuned.yaml`;
+3. the notebook runs from that commit with no modified tracked file.
 
 ## 0. Setup (every session)
 
@@ -48,13 +50,12 @@ running anything. Finished runs are skipped; nothing is overwritten.
 !python experiments/00_smoke_test.py
 !python experiments/00b_exp0_smoke.py
 !python -c "import json; from pathlib import Path; from src.utils.env import collect_environment; e = collect_environment(Path('.')); Path('results').mkdir(exist_ok=True); Path('results/kaggle_environment.json').write_text(json.dumps(e, indent=1)); print(json.dumps(e, indent=1))"
-!python -c "from huggingface_hub import HfApi; print('yelp revision:', HfApi().dataset_info('fancyzhx/yelp_polarity').sha)"
 ```
 
-Expected: 73 tests pass; both smoke tests end with `PASSED`; the environment
-report shows `"platform_kind": "kaggle"`, a GPU, a git commit and
-`"dirty": false`. Copy the report into `ENVIRONMENT.md` section 1 and the
-printed Yelp revision into `configs/base.yaml` (`data.revision`), then commit.
+Expected: all unit tests pass; both smoke tests end with `PASSED`; the
+environment report shows `"platform_kind": "kaggle"`, a GPU, a git commit and
+`"dirty": false`. Download `results/kaggle_environment.json`, copy its values
+into `ENVIRONMENT.md` section 1 and commit both.
 
 ## 2. Experiment 0A pilot (not a scientific result)
 
@@ -66,33 +67,59 @@ printed Yelp revision into `configs/base.yaml` (`data.revision`), then commit.
 Purpose: wall-clock per round, memory, disk, and a check that every file is
 written at full data scale (560,000 training rows, 100 clients). It runs seed
 0 for 3 rounds. From `results/exp0a_pilot/rounds.csv` take `round_wall_s` and
-compute the cost of step 3:
+estimate the later steps:
 
 ```
-cost = round_wall_s x rounds x 2 conditions x 2 cells x 8 seeds  (+ 8 centralized runs)
+tuning   = round_wall_s x 50 rounds x 9 grid points
+full run = round_wall_s x 50 rounds x 2 conditions x 2 cells x 8 seeds  (+ 8 centralized runs of 13 epochs)
 ```
 
-Write that estimate into `EXPERIMENT_PLAN.md` section 7. Do not use the
-pilot's accuracy, F1 or correlations for any decision.
+Write the estimate into `EXPERIMENT_PLAN.md` section 7. Do not use the pilot's
+accuracy, F1 or correlations for any decision.
 
-If the `label_skew` cell stops with "no Dirichlet draw with every client >=
-10 samples", decision D2 has not been made yet. That is expected with the
-frozen rule.
-
-## 3. Experiment 0A full run (FIRST SCIENTIFIC RUN)
+## 3. Experiment 0A tuning (validation only; not a scientific result)
 
 ```
-!python experiments/make_partitions.py --config exp0a.yaml --cells
-!python experiments/exp0a_controlled_diagnostic.py --mode full
+!python experiments/exp0a_tune.py
+!cat results/exp0a_tuning/selected.json
+!zip -qr /kaggle/working/exp0a_tuning.zip results/exp0a_tuning partitions
+```
+
+It runs FedAvg on the label-skew cell with seed 7 for the 9 grid points
+(learning rate x weight decay), selects by pooled validation macro-F1 at the
+last round, and writes `tuning.csv`, `selected.json` and `exp0a_tuned.yaml`.
+The test split is never evaluated.
+
+Then, on the laptop:
+
+1. copy `results/exp0a_tuning/exp0a_tuned.yaml` to `configs/exp0a_tuned.yaml`;
+2. check that it says `frozen: true` and `official_environment: true`
+   (otherwise the tuning pass was not made on Kaggle from a clean commit);
+3. commit it together with `results/exp0a_tuning/tuning.csv`,
+   `selected.json` and the tuning partition, add a `CHANGELOG.md` entry with
+   the selected values and whether they lie on the grid edge, and push.
+
+If a selected value is on the edge of the grid, do not extend the grid
+quietly. Either accept the value or record a grid extension in `CHANGELOG.md`
+before running it.
+
+## 4. Experiment 0A full run (FIRST SCIENTIFIC RUN)
+
+From the commit that contains `configs/exp0a_tuned.yaml`:
+
+```
+!python experiments/make_partitions.py --config exp0a_tuned.yaml --cells
+!python experiments/exp0a_controlled_diagnostic.py --config exp0a_tuned.yaml --mode full
 ```
 
 If one session cannot finish all seeds, run them in chunks; each call resumes:
 
 ```
-!python experiments/exp0a_controlled_diagnostic.py --mode full --seeds <s1> <s2>
-!python experiments/exp0a_controlled_diagnostic.py --mode full --seeds <s3> <s4>
-...
-!python experiments/exp0a_controlled_diagnostic.py --mode full --analyze-only
+!python experiments/exp0a_controlled_diagnostic.py --config exp0a_tuned.yaml --mode full --seeds 42 123
+!python experiments/exp0a_controlled_diagnostic.py --config exp0a_tuned.yaml --mode full --seeds 456 789
+!python experiments/exp0a_controlled_diagnostic.py --config exp0a_tuned.yaml --mode full --seeds 1001 2024
+!python experiments/exp0a_controlled_diagnostic.py --config exp0a_tuned.yaml --mode full --seeds 31415 271828
+!python experiments/exp0a_controlled_diagnostic.py --config exp0a_tuned.yaml --mode full --analyze-only
 ```
 
 Save the outputs before the session ends:
@@ -113,10 +140,12 @@ Check before reading any number:
 * `runs.csv`: `official_environment` is True, `git_dirty` is False and
   `git_commit` equals `<COMMIT>` in every row.
 
-Reminder: 0A describes ordinary label heterogeneity. It is not evidence about
-natural-client lexical confounding.
+The decision rule (EXPERIMENT_PLAN.md section 11) is evaluated by the code
+and written to `summary.json` under `decision_rule_0a`. Reminder: 0A describes
+ordinary label heterogeneity. It is not evidence about natural-client lexical
+confounding.
 
-## 4. Experiment 0B client profiling (no training)
+## 5. Experiment 0B client profiling (no training)
 
 Requires `data.category` (decision D6). Either commit it in
 `configs/amazon2023.yaml` or pass it explicitly:
@@ -136,15 +165,15 @@ Category file sizes range from 9 MB to 31 GB. The reader loads the whole file,
 so choose a category that fits in memory. Do not use `data.max_records` for an
 official run: it keeps the first lines of the file, not a random sample.
 
-After profiling, and before step 5, write into the configs and commit:
+After profiling, and before step 6, write into the configs and commit:
 
 * `data.category`,
 * `data.client_filter.min_reviews` (and `max_reviews`, `max_clients` if used),
   separately for `exp0b_user.yaml` and `exp0b_product.yaml` if they differ,
-* `fl.prior_reference` (decision D4), PROVISIONAL values, `protocol.frozen: true`,
+* `fl.prior_reference` (decision D4), the PROVISIONAL values, `protocol.frozen: true`,
 * a `CHANGELOG.md` entry stating the rule and that no model result existed.
 
-## 5. Experiment 0B training
+## 6. Experiment 0B training
 
 Pilot first (seed 0, 3 rounds, not a result):
 
@@ -165,7 +194,7 @@ Full runs:
 data and the committed filter rule, the partition is saved on first use, and
 its hash is checked on every later load.
 
-Check before reading any number: the same three points as in step 3, plus
+Check before reading any number: the same three points as in step 4, plus
 `"overlap": 0` under `dataset.holdout` in any `run_metadata.json`.
 
 ## What each run directory contains

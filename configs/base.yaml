@@ -4,7 +4,8 @@
 
 experiment:
   name: default
-  seeds: [42, 123, 456, 789, 2026]
+  # Official seeds, frozen 2026-10-02 (EXPERIMENT_PLAN.md amendment A7).
+  seeds: [42, 123, 456, 789, 1001, 2024, 31415, 271828]
   results_dir: results
 
 device: auto          # cuda if available, else cpu
@@ -12,7 +13,8 @@ client_threads: 1     # torch threads per simulated client
 
 data:
   dataset: yelp_polarity
-  revision: null      # pin the dataset revision here once fixed on Kaggle
+  # Hugging Face commit of fancyzhx/yelp_polarity, pinned 2026-10-02.
+  revision: bbf1c97a1f0cf005e5aded43839fd814654a1557
   cache_dir: data_cache
   max_train: null     # null = full official train split
   max_test: null      # null = full official test split

@@ -96,7 +96,30 @@ def main() -> int:
     cfg, exp_dir = run("exp0a.yaml", SMALL_YELP)
     verify("0A", cfg, exp_dir, natural=False)
     check("0A: decision rule evaluated mechanically for both federated conditions",
-          set(json.loads((exp_dir / "summary.json").read_text())["decision_rule_0a"]) == set(exp0.FEDERATED))
+          set(json.loads((exp_dir / "summary.json").read_text())["decision_rule_0a"]["conditions"]) == set(exp0.FEDERATED))
+
+    # validation-only tuning pass at toy scale (2 x 2 grid, 3 rounds)
+    from src.analysis import tuning
+
+    tune_cfg = load_config("exp0a.yaml", overrides={
+        **SMALL_YELP, "fl.rounds": 3, "tuning.grid.lr": [0.1, 0.5], "tuning.grid.weight_decay": [0.00001, 0.0001]})
+    tune_dir = exp0.experiment_dir(tuning.tuning_config(tune_cfg, 0.1, 0.00001))
+    if tune_dir.exists():
+        shutil.rmtree(tune_dir)
+    tuning.run_grid(tune_cfg)
+    selected = tuning.select(tune_cfg)
+    finals = [json.loads(p.read_text()) for p in tune_dir.glob("*/seed*/final.json")]
+    histories = [json.loads(p.read_text()) for p in tune_dir.glob("*/seed*/history.json")]
+    check("tuning: every grid point ran", len(finals) == 4)
+    check("tuning: the test split was never evaluated",
+          all(f["test"] == {} and f["test_evaluated"] is False for f in finals)
+          and not any("test_macro_f1" in row or "test_accuracy" in row for h in histories for row in h))
+    check("tuning: selection and tuned config written",
+          all((tune_dir / n).exists() for n in ("tuning.csv", "selected.json", "exp0a_tuned.yaml")))
+    check("tuning: a laptop tuning pass cannot unlock the official run",
+          selected["official_environment"] is False and "frozen: false" in (tune_dir / "exp0a_tuned.yaml").read_text())
+    check("tuning: uses its own seed and the label-skew partition",
+          selected["tuning_seed"] == 7 and selected["cell"] == "label_skew")
 
     review_file = RESULTS / "_smoke_exp0b_data" / "Synthetic.jsonl"
     review_file.parent.mkdir(parents=True, exist_ok=True)

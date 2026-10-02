@@ -123,9 +123,17 @@ def test_official_run_preconditions():
     assert any("requires 8" in p for p in problems)        # a 5-seed list is not accepted for the 8-seed protocol
     assert any("data.revision is not pinned" in p for p in problems)
 
-    ready = deep_merge(cfg, {"protocol": {"frozen": True}, "data": {"revision": "deadbeef"},
-                             "experiment": {"seeds": [1, 2, 3, 4, 5, 6, 7, 8]}})
+    untuned = deep_merge(cfg, {"protocol": {"frozen": True}, "data": {"revision": "deadbeef"},
+                               "experiment": {"seeds": [1, 2, 3, 4, 5, 6, 7, 8]}})
+    assert any("no tuning result" in p for p in exp0.official_preconditions(untuned, kaggle, untuned["experiment"]["seeds"]))
+    laptop_tuned = deep_merge(untuned, {"fl": {"lr": 0.3, "weight_decay": 1e-5}, "protocol": {"tuning": {
+        "selected": {"lr": 0.3, "weight_decay": 1e-5}, "official_environment": False}}})
+    assert any("not run in the official environment" in p
+               for p in exp0.official_preconditions(laptop_tuned, kaggle, untuned["experiment"]["seeds"]))
+    ready = deep_merge(laptop_tuned, {"protocol": {"tuning": {"official_environment": True}}})
     assert exp0.official_preconditions(ready, kaggle, ready["experiment"]["seeds"]) == []
+    edited = deep_merge(ready, {"fl": {"lr": 0.1}})          # someone changed the tuned value by hand
+    assert any("differ from the values selected" in p for p in exp0.official_preconditions(edited, kaggle, ready["experiment"]["seeds"]))
     laptop = {"platform_kind": "local", "git": {"commit": None, "dirty": True}}
     assert set(exp0.official_preconditions(ready, laptop, ready["experiment"]["seeds"])) == {
         "not running on Kaggle", "no git commit", "git working tree has uncommitted changes"}
@@ -147,7 +155,15 @@ def test_experiment_0a_config_matches_the_frozen_design():
     assert cfg["data"]["dataset"] == "yelp_polarity" and cfg["data"]["max_train"] is None and cfg["data"]["max_test"] is None
     assert set(cfg["cells"]) == {"iid", "label_skew"}
     assert cfg["cells"]["iid"] == {"scheme": "iid", "num_clients": 100}
-    assert cfg["cells"]["label_skew"]["alpha"] == 0.1 and cfg["cells"]["label_skew"]["num_clients"] == 100
+    assert cfg["cells"]["label_skew"] == {"scheme": "dirichlet_client", "alpha": 0.1, "num_clients": 100}
+    assert cfg["experiment"]["seeds"] == [42, 123, 456, 789, 1001, 2024, 31415, 271828]
+    assert cfg["protocol"]["required_seed_count"] == 8 and cfg["protocol"]["requires_tuning"] is True
+    assert cfg["data"]["revision"] == "bbf1c97a1f0cf005e5aded43839fd814654a1557"
+    assert cfg["tuning"]["seed"] not in cfg["experiment"]["seeds"] and cfg["tuning"]["seed"] != cfg["pilot"]["seed"]
+    assert all(wd > 0 for wd in cfg["tuning"]["grid"]["weight_decay"])
+    fl = cfg["fl"]
+    assert cfg["centralized"]["epochs"] == -(-fl["rounds"] * fl["fraction_fit"] * fl["local_epochs"] // 1)
+    assert cfg["decision_rule"]["margin"] == 0.10
     assert exp0.CONDITIONS == ("centralized", "fedavg", "fedavg_la")
     assert cfg["diagnostic"]["min_document_frequency"] == 50
     iid = exp0.cell_config(cfg, "iid")["partition"]
@@ -188,3 +204,54 @@ def test_collect_tables(finished_run):
     with open(exp0.experiment_dir(cfg) / "runs.csv", encoding="utf-8") as f:
         rows = list(csv.DictReader(f))
     assert any(r["algorithm"] == "centralized" and r["seed"] == "42" for r in rows)
+
+
+def _summary(skew_s, skew_p, iid_s, iid_p, la=None):
+    def entry(spearman, partial):
+        return {"spearman": {"per_seed": spearman}, "partial_pearson": {"per_seed": partial}}
+    la = la or (skew_s, skew_p)
+    n = len(skew_s)
+    return {"cells": {
+        "label_skew": {"seeds": list(range(n)), "bias_vs_exposure": {"fedavg": entry(skew_s, skew_p), "fedavg_la": entry(*la)}},
+        "iid": {"seeds": list(range(n)), "bias_vs_exposure": {"fedavg": entry(iid_s, iid_p), "fedavg_la": entry(iid_s, iid_p)}},
+    }}
+
+
+def test_decision_rule_requires_raw_and_partial_correlation():
+    strong, weak, null = [0.5] * 8, [0.04] * 8, [0.01, -0.02, 0.0, 0.01, -0.01, 0.02, 0.0, -0.01]
+    # raw correlation only (what an under-trained model produces): no effect
+    r = exp0.decision_rule_0a(_summary(strong, weak, null, null), "label_skew")
+    assert r["conditions"]["fedavg"]["raw_spearman"]["passed"] and not r["conditions"]["fedavg"]["partial_pearson"]["passed"]
+    assert not r["conditions"]["fedavg"]["effect_declared"] and r["conditions"]["fedavg"]["raw_only"] and r["outcome"] == "A"
+    # both criteria met by FedAvg and by the corrected model: outcome C
+    assert exp0.decision_rule_0a(_summary(strong, strong, null, null), "label_skew")["outcome"] == "C"
+    # FedAvg shows the effect, the label-prior correction removes it: outcome B
+    assert exp0.decision_rule_0a(_summary(strong, strong, null, null, la=(weak, weak)), "label_skew")["outcome"] == "B"
+    # one seed with the opposite sign breaks the rule
+    flipped = [0.5] * 7 + [-0.5]
+    assert exp0.decision_rule_0a(_summary(flipped, strong, null, null), "label_skew")["outcome"] == "A"
+    # the partial correlation must be defined in every seed
+    assert exp0.decision_rule_0a(_summary(strong, [0.5] * 7, null, null), "label_skew")["outcome"] == "A"
+    # raw and partial with opposite signs do not count as an effect
+    assert exp0.decision_rule_0a(_summary(strong, [-0.5] * 8, null, null), "label_skew")["outcome"] == "A"
+    # the excess over the IID control must reach the margin
+    assert exp0.decision_rule_0a(_summary(strong, strong, [0.45] * 8, [0.45] * 8), "label_skew")["outcome"] == "A"
+    # undefined control values count as zero
+    assert exp0.decision_rule_0a(_summary(strong, strong, null, []), "label_skew")["outcome"] == "C"
+
+
+def test_tuning_grid_never_uses_test_data_or_official_seeds():
+    from src.analysis import tuning
+
+    cfg = load_config("exp0a.yaml")
+    points = tuning.grid_points(cfg)
+    assert len(points) == 9
+    for lr, wd in points:
+        run_cfg = tuning.tuning_config(cfg, lr, wd)
+        assert run_cfg["eval"]["test"] is False
+        assert run_cfg["fl"]["algorithm"] == "fedavg" and run_cfg["fl"]["lr"] == lr and run_cfg["fl"]["weight_decay"] == wd
+        assert run_cfg["partition"]["scheme"] == "dirichlet_client" and run_cfg["experiment"]["name"] == "exp0a_tuning"
+    assert len({str(tuning.run_dir_for(cfg, lr, wd)) for lr, wd in points}) == 9
+    bad = deep_merge(cfg, {"tuning": {"seed": 42}})
+    with pytest.raises(ValueError, match="tuning seed"):
+        tuning.run_grid(bad)

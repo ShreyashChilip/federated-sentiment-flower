@@ -5,7 +5,7 @@
 | Source of variation | How it is controlled |
 |---|---|
 | Package versions | `requirements.txt`, `requirements-kaggle.txt`; actual versions stored per run |
-| Dataset | Official Hugging Face split; revision pinned in `configs/base.yaml` (`data.revision`) once recorded on Kaggle; size, class counts and a fingerprint stored per run |
+| Dataset | Official Hugging Face split of `fancyzhx/yelp_polarity`, pinned to revision `bbf1c97a1f0cf005e5aded43839fd814654a1557` (`data.revision` in `configs/base.yaml`); size, class counts and a fingerprint stored per run |
 | Train/val/client-test roles | `src/data/roles.py`, seed `derive_seed("roles", dataset, role_seed)`; independent of the experiment seed |
 | Features | Fitted on train-role rows only; cached in `data_cache/features/<dataset>_<hash>` keyed by the data and feature config |
 | Partition | Created once by `experiments/make_partitions.py`, saved to `partitions/` as `.npz` (indices) + `.json` (client ids, sizes, class counts, parameters, seed, SHA-256). Runs only **load** partitions and verify the hash; a missing partition is an error |
@@ -17,7 +17,9 @@
 | Aggregation order | Client replies are sorted by client id before aggregation, so parallel execution order cannot change floating-point sums |
 | Threads | One torch thread per simulated client |
 
-Seeds used: 42, 123, 456, 789, 2026 (`src/utils/seeding.py`).
+Official seeds (frozen 2026-10-02): **42, 123, 456, 789, 1001, 2024, 31415, 271828**
+(`configs/base.yaml`, `src/utils/seeding.py`). Reserved non-official seeds: 0 for
+pilot runs, 7 for hyperparameter tuning. An official run refuses any other seed.
 
 ## What every run records (`run_metadata.json`)
 
@@ -79,3 +81,17 @@ space.
   asserted when the bundle is built and stored in its metadata.
 * **Amazon source.** Repository revision pinned in `configs/amazon2023.yaml`;
   the SHA-256 of the category file is stored with every bundle and profile.
+
+## Experiment 0A specifics (frozen 2026-10-02)
+
+* **Partition.** `dirichlet_client/v1`, 100 clients, alpha = 0.1; exact
+  algorithm in `EXPERIMENT_PLAN.md` section 12. Partition seed =
+  `derive_seed("partition", experiment seed)`. Each partition file stores the
+  algorithm identifier, realized per-client class counts and a SHA-256.
+* **Tuning.** Seed 7, validation role only, test split never evaluated;
+  `results/exp0a_tuning/tuning.csv` and its SHA-256 are referenced from the
+  tuned config (`EXPERIMENT_PLAN.md` section 10).
+* **Decision rule.** `EXPERIMENT_PLAN.md` section 11, evaluated by code.
+* **Kaggle environment.** Every run stores its environment. The summary in
+  `ENVIRONMENT.md` section 1 must still be filled from a Kaggle-produced
+  `kaggle_environment.json`; that file has not been committed yet.

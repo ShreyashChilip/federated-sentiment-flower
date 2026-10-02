@@ -74,3 +74,29 @@ Diagnostic definition (made on a synthetic fixture, before any real data):
 * The partial-correlation statistic now returns "undefined" when the bias is
   fully explained by the reference coefficients, instead of a correlation of
   rounding noise.
+
+## 2026-10-02 (author decisions before any scientific 0A run; no official result existed)
+
+* **Seeds (A7).** Official seeds are 42, 123, 456, 789, 1001, 2024, 31415,
+  271828. Seed 2026 of the first list is no longer used. `configs/base.yaml`
+  and `src/utils/seeding.py` updated.
+* **Partition (A10).** The label-skew cell of 0A uses `dirichlet_client/v1`
+  (100 equal-size clients, alpha = 0.1). Reason: the per-class recipe with a
+  minimum client size cannot produce a partition at N = 100, alpha = 0.1, and
+  dropping the minimum would mix extreme size skew into a label-skew
+  diagnostic. The algorithm identifier is stored with every partition.
+* **Tuning (A8, A12).** Validation-only tuning of learning rate and weight
+  decay added (`experiments/exp0a_tune.py`, `src/analysis/tuning.py`). New
+  config switch `eval.test: false` makes a run skip the test split entirely.
+  The official run now also requires a tuning result produced on Kaggle and
+  checks that the tuned values are the ones in use. Centralized epochs set to
+  13 by the equal-passes rule. All formerly PROVISIONAL 0A values are now
+  either fixed a priori or tuned.
+* **Decision rule (A9).** The raw Spearman criterion alone no longer declares
+  an effect; the partial-correlation criterion must hold as well, with equal
+  signs. `summary.json` now reports both criteria, the outcome (A/B/C) and a
+  `raw_only` flag.
+* **Dataset pin (A11).** `data.revision` set for Yelp. The data fingerprint
+  of the laptop subset is unchanged by the pin.
+* Not done: the Kaggle environment report is still not in the repository, so
+  `ENVIRONMENT.md` section 1 remains empty.

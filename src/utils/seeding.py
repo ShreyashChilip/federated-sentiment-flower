@@ -12,7 +12,7 @@ import random
 
 import numpy as np
 
-SEEDS = (42, 123, 456, 789, 2026)
+SEEDS = (42, 123, 456, 789, 1001, 2024, 31415, 271828)
 
 
 def derive_seed(*parts) -> int:

@@ -80,3 +80,6 @@ item comes from `Planned Improvements.docx`.
 | 32-34 | Per-client and worst-client metrics now also computed for held-out (unseen) clients in the natural-client path. Status: Smoke |
 | 44 | Results schema with validation, immutable run directories and flat `runs.csv` / `rounds.csv` / `clients.csv`. Status: Smoke |
 | - | New diagnostic experiments 0A and 0B prepared; see `docs/PHASE_0_TO_PHASE_1_AUDIT.md` for open decisions |
+| 16, 21 | 2026-10-02: the 8 official seeds are fixed (42, 123, 456, 789, 1001, 2024, 31415, 271828) and set in `configs/base.yaml`. Row 16 "Required correction" and row 21 now read 8 seeds. Status: Smoke / Code |
+| 13 | 2026-10-02: equal tuning philosophy made concrete for 0A: validation-only grid over learning rate and weight decay (`EXPERIMENT_PLAN.md` section 10). Status: Smoke |
+| 30 | Unequal client sizes are kept out of the core 0A diagnostic and remain a separate sensitivity experiment. Status unchanged |

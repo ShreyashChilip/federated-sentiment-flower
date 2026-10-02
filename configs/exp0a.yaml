@@ -8,47 +8,80 @@
 # Conditions per seed: centralized, FedAvg, FedAvg + local label-prior logit
 # correction (fedavg_la). All three share one feature space, one optimizer
 # configuration and one test set.
+#
+# Everything in this file was fixed on 2026-10-02, before any scientific
+# result. The two tuned values (fl.lr, fl.weight_decay) are NOT set here: they
+# come from the validation-only tuning pass and live in exp0a_tuned.yaml,
+# which inherits this file. The official run uses exp0a_tuned.yaml.
 inherits: yelp.yaml
 
 experiment:
   name: exp0a
-  # The official seed list is inherited from base.yaml. The full run requires
-  # protocol.required_seed_count seeds and refuses to start otherwise.
+  # seeds: the 8 official seeds are inherited from base.yaml.
 
 protocol:
-  frozen: false            # set to true (with a CHANGELOG entry) once every
-                           # PROVISIONAL value below has been approved
+  frozen: false            # true only in exp0a_tuned.yaml
+  requires_tuning: true
   required_seed_count: 8
 
 pilot:                     # engineering run: timing and plumbing only
-  seed: 0                  # deliberately not one of the official seeds
+  seed: 0                  # not an official seed
   rounds: 3
   centralized_epochs: 1
 
 centralized_cell: iid      # the centralized model is trained once per seed
 cells:
-  iid:
+  iid:                     # control
     scheme: iid
     num_clients: 100
-  label_skew:              # Dirichlet(alpha = 0.1)
-    scheme: dirichlet      # frozen recipe; see PHASE_0_TO_PHASE_1_AUDIT.md section 4:
-    alpha: 0.1             # with N = 100 and alpha = 0.1 the ">= 10 samples per
-    num_clients: 100       # client" redraw rule cannot be met. Decision required.
-    min_client_size: 10
+  label_skew:              # equal-size clients; alpha controls label composition only
+    scheme: dirichlet_client
+    alpha: 0.1
+    num_clients: 100
 
-fl:
-  rounds: 50               # PROVISIONAL
-  fraction_fit: 0.25       # PROVISIONAL (C)
-  local_epochs: 1          # PROVISIONAL (E)
+features:                  # fixed a priori, not tuned
+  type: tfidf
+  max_features: 50000
+  ngram_range: [1, 2]
+  min_df: 5
+  sublinear_tf: true
+
+fl:                        # fixed a priori, not tuned
+  rounds: 50
+  fraction_fit: 0.25       # C: 25 of 100 clients per round
+  local_epochs: 1          # E
   batch_size: 32
-  lr: 0.1                  # PROVISIONAL
-  weight_decay: 0.0        # PROVISIONAL; identical in all three conditions
-  prior_reference: none    # fedavg_la offset = log(local class prior), as frozen
+  optimizer: sgd
+  momentum: 0.0
+  lr_decay: 1.0
+  server_lr: 1.0
+  dropout_prob: 0.0
+  straggler_prob: 0.0
+  prior_reference: none    # fedavg_la offset = log(add-one local class prior)
+  # Tuned on validation data (see `tuning`); identical in all three conditions.
+  # The values below are placeholders and are overridden by exp0a_tuned.yaml.
+  lr: 0.1
+  weight_decay: 0.00001
 
 centralized:
-  epochs: 10               # PROVISIONAL
+  # Same number of passes over the training rows as the federated runs:
+  # ceil(rounds * fraction_fit * local_epochs) = ceil(50 * 0.25 * 1) = 13.
+  epochs: 13
 
-diagnostic:                # fixed before any result
+tuning:                    # validation-only; the test split is never evaluated
+  seed: 7                  # not an official seed and not the pilot seed
+  cell: label_skew
+  algorithm: fedavg        # the baseline is tuned; fedavg_la has no extra hyperparameter
+  grid:
+    lr: [0.03, 0.1, 0.3]
+    weight_decay: [0.000001, 0.00001, 0.0001]   # non-zero by design (audit M5)
+  criterion: val_macro_f1  # pooled validation role, last round
+  tie_break: [smaller_lr, larger_weight_decay]
+
+decision_rule:             # EXPERIMENT_PLAN.md amendment A9
+  margin: 0.10
+
+diagnostic:
   min_document_frequency: 50   # frozen in EXPERIMENT_PLAN.md section 5
   min_client_frequency: 1
   null_repeats: 20

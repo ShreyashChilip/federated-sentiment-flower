@@ -202,8 +202,9 @@ python -m pytest tests -q
 python experiments/00_smoke_test.py
 python experiments/00b_exp0_smoke.py
 python experiments/exp0a_controlled_diagnostic.py --mode pilot --create-partitions
-python experiments/make_partitions.py --config exp0a.yaml --cells
-python experiments/exp0a_controlled_diagnostic.py --mode full          # first scientific run
+python experiments/exp0a_tune.py                                        # validation-only tuning
+python experiments/make_partitions.py --config exp0a_tuned.yaml --cells
+python experiments/exp0a_controlled_diagnostic.py --config exp0a_tuned.yaml --mode full   # first scientific run
 python experiments/exp0b_profile_clients.py --definition user --set data.category=<Category>
 python experiments/exp0b_profile_clients.py --definition product --set data.category=<Category>
 python experiments/exp0b_natural_clients.py --definition user --mode pilot --create-partitions
@@ -227,3 +228,22 @@ python experiments/exp0b_natural_clients.py --definition product --mode full --c
 | D9 | 0A decision rule (M4) | Keep the raw Spearman rule, or declare an effect only if the partial correlation also satisfies it | Add the partial-correlation condition, as a dated protocol amendment made before any result |
 | D10 | Held-out clients in 0B (M11) | One fixed held-out set, or a different set per seed | One fixed set for the first run; state it as a limitation |
 | D11 | Is the pilot allowed to inform anything? | - | Timing and memory only. The pilot uses seed 0, which is not an official seed |
+
+## 9. Decisions taken on 2026-10-02
+
+| # | Decision | Where it is implemented |
+|---|---|---|
+| D1 | Seeds 42, 123, 456, 789, 1001, 2024, 31415, 271828 | `configs/base.yaml`; plan amendment A7 |
+| D2 | `dirichlet_client`, 100 equal-size clients, alpha = 0.1; unequal sizes studied separately later | `configs/exp0a.yaml`; plan section 12 |
+| D3 | Validation-only tuning of learning rate and weight decay before the official run | `experiments/exp0a_tune.py`; plan section 10 |
+| D9 | Raw Spearman alone is insufficient; the partial-correlation criterion is required too | `decision_rule_0a`; plan section 11 |
+| D5 | Yelp revision pinned | `configs/base.yaml`. The Kaggle environment report is **still missing** from the repository |
+
+Mismatches M1 (infeasible redraw rule), M2 (seed count), M3 (untuned
+hyperparameters), M4 (decision rule) and M5 (no regularization) are closed for
+Experiment 0A by these decisions. M1 remains relevant for later experiments
+that use the per-class recipe (Phase 1 baseline at N = 10, alpha = 0.1).
+
+Still open: D4 (prior reference for 0B), D6 (Amazon category), D7 (client-size
+rule), D8 (Amazon licence), D10 (held-out clients per seed), and the Kaggle
+environment record.

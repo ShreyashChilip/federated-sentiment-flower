@@ -80,7 +80,8 @@ def analyse(cfg: dict, seeds: list[int]) -> dict:
     summary = exp0.aggregate(exp_dir, list(cfg["cells"]))
     skew = [c for c, part in cfg["cells"].items() if part["scheme"].startswith("dirichlet")]
     if skew and "iid" in cfg["cells"]:
-        summary["decision_rule_0a"] = exp0.decision_rule_0a(summary, skew[0])
+        summary["decision_rule_0a"] = exp0.decision_rule_0a(
+            summary, skew[0], margin=float(cfg["decision_rule"]["margin"]))
     summary["schema"] = collect_tables(exp_dir)
     with open(exp_dir / "summary.json", "w", encoding="utf-8") as f:
         json.dump(summary, f, indent=1)

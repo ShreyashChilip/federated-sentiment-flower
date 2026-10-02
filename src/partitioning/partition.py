@@ -54,6 +54,11 @@ def dirichlet_partition(
     )
 
 
+# Identifier stored with every partition made by dirichlet_client_partition.
+# Any change to that function's sampling order must change this string.
+DIRICHLET_CLIENT_ALGORITHM = "dirichlet_client/v1"
+
+
 def dirichlet_client_partition(labels: np.ndarray, num_clients: int, alpha: float, seed: int) -> list[np.ndarray]:
     """Client-wise Dirichlet label skew with equal client sizes.
 
@@ -147,7 +152,7 @@ def make_partition(labels: np.ndarray, cfg: dict, seed: int, groups=None) -> tup
         clients, tries = dirichlet_partition(labels, num_clients, cfg["alpha"], seed, min_size)
         return clients, {"draws_used": tries}
     if scheme == "dirichlet_client":
-        return dirichlet_client_partition(labels, num_clients, cfg["alpha"], seed), {}
+        return dirichlet_client_partition(labels, num_clients, cfg["alpha"], seed), {"algorithm": DIRICHLET_CLIENT_ALGORITHM}
     if scheme == "quantity_skew":
         clients, tries = quantity_skew_partition(n, num_clients, cfg["beta"], seed, min_size)
         return clients, {"draws_used": tries}
