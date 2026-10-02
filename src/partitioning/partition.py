@@ -49,8 +49,50 @@ def dirichlet_partition(
             return clients, attempt
     raise RuntimeError(
         f"no Dirichlet draw with every client >= {min_client_size} samples in {max_tries} tries "
-        f"(N={num_clients}, alpha={alpha}); lower min_client_size or the client count"
+        f"(N={num_clients}, alpha={alpha}). For many clients and small alpha this rule cannot be met; "
+        "see docs/PHASE_0_TO_PHASE_1_AUDIT.md, section 4, for the options"
     )
+
+
+def dirichlet_client_partition(labels: np.ndarray, num_clients: int, alpha: float, seed: int) -> list[np.ndarray]:
+    """Client-wise Dirichlet label skew with equal client sizes.
+
+    Every client k receives floor(n / N) samples (the first n mod N clients in
+    a seeded random order receive one more) and a label distribution
+    q_k ~ Dir(alpha * 1_C). Its class counts are drawn as
+    Multinomial(size_k, q_k) and taken without replacement from the class
+    pools. When a pool runs out, the shortfall is redrawn from the classes
+    that still have stock, with q_k renormalized over them.
+
+    No client can be empty or tiny, so no redraw rule is needed. Known
+    artifact: clients served last are constrained by what is left in the
+    pools and are therefore closer to the leftover class mix than to their
+    own q_k. The realized class counts are saved with the partition.
+    """
+    labels = np.asarray(labels)
+    rng = np.random.default_rng(seed)
+    classes = np.unique(labels)
+    pools = [rng.permutation(np.flatnonzero(labels == c)) for c in classes]
+    used = np.zeros(len(classes), dtype=np.int64)
+    stock = np.array([len(p) for p in pools], dtype=np.int64)
+    order = rng.permutation(num_clients)
+    sizes = np.full(num_clients, len(labels) // num_clients, dtype=np.int64)
+    sizes[order[: len(labels) % num_clients]] += 1
+    clients: list = [None] * num_clients
+    for k in order:
+        q = rng.dirichlet(np.full(len(classes), alpha))
+        take = np.zeros(len(classes), dtype=np.int64)
+        need = int(sizes[k])
+        while need > 0:
+            available = stock - used - take
+            w = np.where(available > 0, q, 0.0)
+            w = w / w.sum() if w.sum() > 0 else (available > 0) / (available > 0).sum()
+            draw = np.minimum(rng.multinomial(need, w), available)
+            take += draw
+            need -= int(draw.sum())
+        clients[k] = np.sort(np.concatenate([pools[c][used[c]:used[c] + take[c]] for c in range(len(classes))]))
+        used += take
+    return clients
 
 
 def quantity_skew_partition(
@@ -83,9 +125,20 @@ def natural_partition(group_keys, min_client_size: int = 1) -> tuple[list[np.nda
     return [g for _, g in kept], [k for k, _ in kept]
 
 
-def make_partition(labels: np.ndarray, cfg: dict, seed: int) -> tuple[list[np.ndarray], dict]:
-    """Dispatch on ``cfg['scheme']``; returns clients and extra info to record."""
+def make_partition(labels: np.ndarray, cfg: dict, seed: int, groups=None) -> tuple[list[np.ndarray], dict]:
+    """Dispatch on ``cfg['scheme']``; returns clients and extra info to record.
+
+    ``groups`` (natural scheme only) holds one integer client code per row, or
+    -1 for rows that belong to no training client (held-out clients).
+    """
     scheme = cfg["scheme"]
+    if scheme == "natural":
+        if groups is None:
+            raise ValueError("the natural scheme needs the per-row client codes of the dataset")
+        groups = np.asarray(groups)
+        rows = np.flatnonzero(groups >= 0)
+        parts, keys = natural_partition(groups[rows], min_client_size=1)
+        return [rows[p] for p in parts], {"client_codes": [int(k) for k in keys]}
     n, num_clients = len(labels), cfg["num_clients"]
     min_size = cfg.get("min_client_size", 10)
     if scheme == "iid":
@@ -93,6 +146,8 @@ def make_partition(labels: np.ndarray, cfg: dict, seed: int) -> tuple[list[np.nd
     if scheme == "dirichlet":
         clients, tries = dirichlet_partition(labels, num_clients, cfg["alpha"], seed, min_size)
         return clients, {"draws_used": tries}
+    if scheme == "dirichlet_client":
+        return dirichlet_client_partition(labels, num_clients, cfg["alpha"], seed), {}
     if scheme == "quantity_skew":
         clients, tries = quantity_skew_partition(n, num_clients, cfg["beta"], seed, min_size)
         return clients, {"draws_used": tries}

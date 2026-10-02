@@ -28,6 +28,8 @@ def main() -> None:
     parser.add_argument("--clients", nargs="*", type=int, default=[10, 50, 100])
     parser.add_argument("--seeds", nargs="*", type=int, default=None)
     parser.add_argument("--no-iid", action="store_true")
+    parser.add_argument("--cells", action="store_true",
+                        help="create exactly the partitions listed under 'cells' in the config (Experiment 0)")
     args = parser.parse_args()
 
     cfg = load_config(args.config)
@@ -37,17 +39,18 @@ def main() -> None:
     schemes = [{"scheme": "dirichlet", "alpha": a, "min_client_size": min_size} for a in args.alphas]
     if not args.no_iid:
         schemes.append({"scheme": "iid"})
-    for n in args.clients:
-        for scheme in schemes:
-            for seed in seeds:
-                part_cfg = {**scheme, "num_clients": n}
-                _, summary, created = get_partition(
-                    partitions_dir(cfg), cfg["data"]["dataset"], bundle.y_train, bundle.roles,
-                    bundle.num_classes, part_cfg, seed, create=True,
-                )
-                sizes = [c["num_samples"] for c in summary["clients"]]
-                print(f"{'created ' if created else 'verified'} {summary['name']}  sha256={summary['sha256'][:12]}  "
-                      f"sizes min/median/max = {min(sizes)}/{sorted(sizes)[len(sizes) // 2]}/{max(sizes)}")
+    grid = [{**scheme, "num_clients": n} for n in args.clients for scheme in schemes]
+    if args.cells:
+        grid = [dict(cell) for cell in cfg["cells"].values()]
+    for part_cfg in grid:
+        for seed in seeds:
+            _, summary, created = get_partition(
+                partitions_dir(cfg), cfg["data"]["dataset"], bundle.y_train, bundle.roles,
+                bundle.num_classes, part_cfg, seed, create=True,
+            )
+            sizes = [c["num_samples"] for c in summary["clients"]]
+            print(f"{'created ' if created else 'verified'} {summary['name']}  sha256={summary['sha256'][:12]}  "
+                  f"sizes min/median/max = {min(sizes)}/{sorted(sizes)[len(sizes) // 2]}/{max(sizes)}")
 
 
 if __name__ == "__main__":

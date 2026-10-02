@@ -6,8 +6,8 @@ manuscript, reviewer comments and improvement plan are summarised in
 `docs/EXISTING_MATERIALS_AUDIT.md`. No number from the original paper or its
 code is reused.
 
-**Current state: Phase 0 (infrastructure) is complete on the development
-laptop. No official result exists yet.** Official results come only from
+**Current state: Phase 0 (infrastructure) is complete and Experiment 0
+(diagnostics 0A and 0B) is prepared but not run. No official result exists yet.** Official results come only from
 Kaggle.
 
 ## Where things are
@@ -17,7 +17,10 @@ Kaggle.
 | `REQUIREMENTS_MATRIX.md` | Every reviewer requirement and its status |
 | `EXPERIMENT_PLAN.md` | Frozen protocol, phases, gates, open decisions |
 | `EXPERIMENT_LOG.md` | What was run, when, and what was observed |
-| `NOVELTY_AUDIT.md` | Prior-art audit (seeded, not complete) |
+| `docs/NOVELTY_AUDIT.md` | Prior-art audit (no novelty claim supported) |
+| `docs/PHASE_0_TO_PHASE_1_AUDIT.md` | Implementation vs plan, open decisions before the first scientific run |
+| `docs/CONFOUNDING_DIAGNOSTIC.md` | Definitions of the within/across-client diagnostics |
+| `docs/KAGGLE_PHASE1_RUNBOOK.md` | Exact Kaggle commands for Experiment 0 |
 | `ENVIRONMENT.md`, `REPRODUCIBILITY.md` | Environments and how runs are made repeatable |
 | `CHANGELOG.md` | Every protocol or code change that could affect results |
 | `configs/` | All settings; experiments take no hard-coded hyperparameters |
@@ -41,8 +44,12 @@ Kaggle.
 * Across-seed statistics: mean, std, 95% CI, paired t, exact Wilcoxon, effect sizes, Holm.
 * Automatic `summary.md` per experiment.
 
-Not implemented yet: TextCNN, DistilBERT + LoRA, Amazon 5-class, natural
-clients, FedNova/FedLC/FedDisco/Fisher baselines, DP, secure aggregation,
+* Experiment 0 preparation: FedAvg with local label-prior correction, Amazon
+  Reviews 2023 natural clients (user or product) with held-out clients,
+  mechanism diagnostics, results schema, immutable run directories.
+
+Not implemented yet: TextCNN, DistilBERT + LoRA, the candidate method,
+FedNova/full FedLC/FedDisco/Fisher baselines, DP, secure aggregation,
 figures and tables, manuscript. See `EXPERIMENT_PLAN.md`.
 
 ## Quick start

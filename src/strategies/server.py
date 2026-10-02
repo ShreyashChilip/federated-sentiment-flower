@@ -120,10 +120,15 @@ def run_server(grid: Grid, run_dir) -> dict:
     replies = _check(grid.send_and_receive(msgs), len(msgs), "registration")
     ledger.record_other("setup", down, [message_bytes(r) for r in replies])
     node_of, n_train = {}, {}
+    class_counts = np.zeros(num_classes, dtype=np.float64)
     for reply in replies:
         cid = int(reply.content["metrics"]["client_id"])
         node_of[cid] = reply.metadata.src_node_id
         n_train[cid] = int(reply.content["metrics"]["n_train"])
+        class_counts += np.asarray(reply.content["metrics"]["class_counts"], dtype=np.float64)
+    round_extra = {}
+    if algorithm == "fedavg_la" and fl.get("prior_reference", "none") == "global":
+        round_extra["global_prior"] = ((class_counts + 1.0) / (class_counts + 1.0).sum()).tolist()
     if sorted(node_of) != list(range(rt.num_clients)):
         raise RuntimeError("client ids reported by the nodes do not match the partition")
     eligible = [c for c in sorted(node_of) if n_train[c] > 0]
@@ -158,7 +163,7 @@ def run_server(grid: Grid, run_dir) -> dict:
         def make(cid: int) -> Message:
             epochs = float(fl["local_epochs"]) * (float(fl.get("straggler_work", 0.5)) if cid in stragglers else 1.0)
             content = dict(base)
-            content["config"] = config_record(run_dir, round=rnd, lr=lr, epochs=epochs)
+            content["config"] = config_record(run_dir, round=rnd, lr=lr, epochs=epochs, **round_extra)
             return Message(content=RecordDict(content), message_type=MessageType.TRAIN,
                            dst_node_id=node_of[cid], group_id=str(rnd))
 

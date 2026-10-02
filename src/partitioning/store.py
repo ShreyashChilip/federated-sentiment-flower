@@ -26,7 +26,13 @@ def partition_hash(clients: list[np.ndarray]) -> str:
 
 def partition_name(dataset: str, n_samples: int, cfg: dict, seed: int) -> str:
     scheme = cfg["scheme"]
-    tag = {"iid": "iid", "dirichlet": f"dir{cfg.get('alpha')}", "quantity_skew": f"qty{cfg.get('beta')}"}[scheme]
+    if scheme == "natural":
+        # Natural clients come from the data; the partition does not depend on the seed.
+        return f"{dataset}_n{n_samples}_natural"
+    tag = {"iid": "iid", "dirichlet": f"dir{cfg.get('alpha')}", "dirichlet_client": f"dirclient{cfg.get('alpha')}",
+           "quantity_skew": f"qty{cfg.get('beta')}"}[scheme]
+    if scheme == "dirichlet" and cfg.get("min_client_size", 10) != 10:
+        tag += f"min{cfg['min_client_size']}"  # a non-default size rule is a different partition
     return f"{dataset}_n{n_samples}_{tag}_N{cfg['num_clients']}_seed{seed}"
 
 
@@ -70,7 +76,7 @@ def load_partition(directory: Path, name: str) -> tuple[list[np.ndarray], dict]:
     return clients, summary
 
 
-def get_partition(directory, dataset, labels, roles, num_classes, cfg, seed, create=False):
+def get_partition(directory, dataset, labels, roles, num_classes, cfg, seed, create=False, groups=None):
     """Load a saved partition; create it only when explicitly asked to.
 
     Returns ``(clients, summary, created)``.
@@ -88,7 +94,7 @@ def get_partition(directory, dataset, labels, roles, num_classes, cfg, seed, cre
             "implicitly; run experiments/make_partitions.py or pass create=True."
         )
     partition_seed = derive_seed("partition", seed)
-    clients, extra = make_partition(labels, cfg, partition_seed)
+    clients, extra = make_partition(labels, cfg, partition_seed, groups)
     summary = {
         "name": name,
         "dataset": dataset,

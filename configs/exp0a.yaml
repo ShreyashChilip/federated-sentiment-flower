@@ -1,0 +1,55 @@
+# Experiment 0A: controlled label-heterogeneity diagnostic (Yelp Polarity, LR).
+#
+# Purpose: sanity check and description of ORDINARY label heterogeneity.
+# A Dirichlet label partition assigns documents to clients independently of
+# their text given the label, so 0A cannot show natural-client lexical
+# confounding. That question belongs to Experiment 0B.
+#
+# Conditions per seed: centralized, FedAvg, FedAvg + local label-prior logit
+# correction (fedavg_la). All three share one feature space, one optimizer
+# configuration and one test set.
+inherits: yelp.yaml
+
+experiment:
+  name: exp0a
+  # The official seed list is inherited from base.yaml. The full run requires
+  # protocol.required_seed_count seeds and refuses to start otherwise.
+
+protocol:
+  frozen: false            # set to true (with a CHANGELOG entry) once every
+                           # PROVISIONAL value below has been approved
+  required_seed_count: 8
+
+pilot:                     # engineering run: timing and plumbing only
+  seed: 0                  # deliberately not one of the official seeds
+  rounds: 3
+  centralized_epochs: 1
+
+centralized_cell: iid      # the centralized model is trained once per seed
+cells:
+  iid:
+    scheme: iid
+    num_clients: 100
+  label_skew:              # Dirichlet(alpha = 0.1)
+    scheme: dirichlet      # frozen recipe; see PHASE_0_TO_PHASE_1_AUDIT.md section 4:
+    alpha: 0.1             # with N = 100 and alpha = 0.1 the ">= 10 samples per
+    num_clients: 100       # client" redraw rule cannot be met. Decision required.
+    min_client_size: 10
+
+fl:
+  rounds: 50               # PROVISIONAL
+  fraction_fit: 0.25       # PROVISIONAL (C)
+  local_epochs: 1          # PROVISIONAL (E)
+  batch_size: 32
+  lr: 0.1                  # PROVISIONAL
+  weight_decay: 0.0        # PROVISIONAL; identical in all three conditions
+  prior_reference: none    # fedavg_la offset = log(local class prior), as frozen
+
+centralized:
+  epochs: 10               # PROVISIONAL
+
+diagnostic:                # fixed before any result
+  min_document_frequency: 50   # frozen in EXPERIMENT_PLAN.md section 5
+  min_client_frequency: 1
+  null_repeats: 20
+  fdr: 0.05

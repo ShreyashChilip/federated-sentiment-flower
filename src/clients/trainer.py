@@ -51,6 +51,7 @@ def local_train(
     mu: float = 0.0,
     c_global: list[np.ndarray] | None = None,
     c_local: list[np.ndarray] | None = None,
+    logit_offset: np.ndarray | None = None,
 ) -> dict:
     """Run mini-batch SGD from the model's current weights.
 
@@ -62,6 +63,12 @@ def local_train(
     * ``scaffold`` corrects every step with (c_global - c_local) and returns the
       updated client control variate using option II of Karimireddy et al.
       (2020): c_new = c_local - c_global + (w_global - w_new) / (steps * lr).
+    * ``logit_offset`` (one value per class) is added to the logits inside the
+      training loss only. With the offset log(local class prior) this is the
+      local label-prior correction (logit adjustment, Menon et al. 2021; the
+      prior term of FedLC, Zhang et al. 2022, without its tuned margin): the
+      client fits p(y | x) / prior_k(y), so its update no longer encodes its
+      own label frequencies. Evaluation never uses the offset.
     """
     model.to(device).train()
     params = [p for p in model.parameters() if p.requires_grad]
@@ -73,6 +80,10 @@ def local_train(
         correction = [
             torch.as_tensor(cg - cl, dtype=p.dtype, device=device) for cg, cl, p in zip(c_global, c_local, params)
         ]
+
+    offset = None
+    if logit_offset is not None:
+        offset = torch.as_tensor(np.asarray(logit_offset), dtype=torch.float32, device=device)
 
     n = len(y)
     steps_total = planned_steps(n, batch_size, epochs)
@@ -90,7 +101,10 @@ def local_train(
             xb = to_tensor(x[batch], device)
             yb = y_t[batch].to(device)
             optimizer.zero_grad(set_to_none=True)
-            loss = F.cross_entropy(model(xb), yb)
+            logits = model(xb)
+            if offset is not None:
+                logits = logits + offset
+            loss = F.cross_entropy(logits, yb)
             loss.backward()
             if algorithm == "fedprox" and mu > 0:
                 for p, p0 in zip(params, start):
@@ -144,3 +158,18 @@ def evaluate(model: torch.nn.Module, x, y: np.ndarray, num_classes: int, device:
 def evaluate_weights(model, weights, x, y, num_classes, device="cpu") -> dict:
     set_weights(model, weights)
     return evaluate(model, x, y, num_classes, device)
+
+
+def label_prior_offset(labels: np.ndarray, num_classes: int, reference: np.ndarray | None = None, smoothing: float = 1.0) -> np.ndarray:
+    """log of the add-``smoothing`` local class prior, optionally minus log of a reference prior.
+
+    ``reference=None`` gives log prior_k(y): the model is pushed towards the
+    class-balanced posterior. With the global class prior as reference the
+    offset is log(prior_k(y) / prior(y)): only the client's deviation from the
+    global label distribution is removed and the global prior stays in the model.
+    """
+    counts = np.bincount(np.asarray(labels, dtype=np.int64), minlength=num_classes).astype(np.float64) + smoothing
+    offset = np.log(counts / counts.sum())
+    if reference is not None:
+        offset = offset - np.log(np.asarray(reference, dtype=np.float64))
+    return offset.astype(np.float32)

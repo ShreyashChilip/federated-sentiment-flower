@@ -1,0 +1,46 @@
+# Experiment 0B, client definition: one client = one user_id.
+# Never mixed with the other definition: separate config, bundle, partition
+# and results directory.
+inherits: amazon2023.yaml
+
+experiment:
+  name: exp0b_user
+
+data:
+  client_definition: user_id
+
+protocol:
+  frozen: false            # set to true once category, client filter and the
+                           # PROVISIONAL values below are approved
+  required_seed_count: 8
+
+pilot:
+  seed: 0
+  rounds: 3
+  centralized_epochs: 1
+
+centralized_cell: natural
+cells:
+  natural:
+    scheme: natural
+
+fl:
+  rounds: 50               # PROVISIONAL
+  fraction_fit: 0.1        # PROVISIONAL
+  local_epochs: 1          # PROVISIONAL
+  batch_size: 32
+  lr: 0.1                  # PROVISIONAL
+  weight_decay: 0.0        # PROVISIONAL
+  prior_reference: none    # see PHASE_0_TO_PHASE_1_AUDIT.md section 8 (imbalanced ratings)
+
+centralized:
+  epochs: 10               # PROVISIONAL
+
+profile:
+  thresholds: [1, 2, 5, 10, 20, 50, 100, 200]
+
+diagnostic:
+  min_document_frequency: 50
+  min_client_frequency: 5
+  null_repeats: 20
+  fdr: 0.05

@@ -57,3 +57,25 @@ The official test split is read in two places only: feature **transformation**
 never partitioned, and no hyperparameter or stopping decision reads it.
 `tests/test_features.py` checks that held-out text cannot change the feature
 space.
+
+## Added with the Experiment 0 preparation
+
+* **Immutable runs.** A run directory that contains `final.json` cannot be
+  written again (`FileExistsError`). An unfinished directory is renamed
+  `<name>.incomplete-<UTC time>` and kept. Each run has a random `run_id`.
+* **Results schema.** `src/utils/schema.py` lists the fields every run must
+  record and validates them; `collect_tables` writes `runs.csv`, `rounds.csv`,
+  `clients.csv` and `schema_validation.json` per experiment.
+* **Comparability checks.** Before any diagnostic is computed, the three
+  conditions of a cell are checked for the same vocabulary hash, bundle,
+  training split, test set, seed, optimizer settings and partition
+  (`src/analysis/exp0.py`). A failed check stops the analysis.
+* **Official-run guard.** `--mode full` starts only on Kaggle, from a commit
+  with no modified tracked file, with `protocol.frozen: true`, the full seed
+  list and a pinned dataset revision.
+* **Natural clients.** The held-out client split is seeded by
+  `data.holdout.holdout_seed`; the client-size rule is part of the config and
+  of the bundle hash; zero overlap between training and held-out clients is
+  asserted when the bundle is built and stored in its metadata.
+* **Amazon source.** Repository revision pinned in `configs/amazon2023.yaml`;
+  the SHA-256 of the category file is stored with every bundle and profile.

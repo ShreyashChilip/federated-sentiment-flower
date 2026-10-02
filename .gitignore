@@ -10,7 +10,7 @@ checkpoints/*
 !checkpoints/.gitkeep
 logs/*
 !logs/.gitkeep
-results/_smoke*/
+results/_smoke*
 *.npz
 !partitions/**/*.npz
 partitions/_smoke/

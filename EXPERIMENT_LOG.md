@@ -52,3 +52,24 @@ Next: Phase 0K (Kaggle bring-up), then the tuning phase.
 5 rounds, seeds 42 and 123) only to exercise the runner, resume logic and
 `summary.md` generation. Output under `results/_smoke_baseline/` (git-ignored).
 This run exposed the Kaggle-detection bug recorded in `CHANGELOG.md`.
+
+## 2026-10-02 - Experiment 0 preparation checks (laptop, NOT official)
+
+* `python -m pytest tests -q`: all unit tests pass (37 from Phase 0 plus the
+  new ones for natural clients, diagnostics, schema and guards).
+* `experiments/00_smoke_test.py`: passes after the changes to trainer, client,
+  server and run metadata.
+* `experiments/00b_exp0_smoke.py`: 0A pilot on a 6,000-row Yelp subset with 5
+  clients, and 0B pilot on a SYNTHETIC review file for both client
+  definitions; all checks pass. Output under `results/_smoke_*` (git-ignored).
+* Reader check on one real file (`Subscription_Boxes.jsonl`, 16,216 lines):
+  parsed without error; 11 empty reviews and 208 duplicates dropped, 15,997
+  kept; all five rating classes present. Only parser counts were looked at.
+* FedAvg run with empty clients (8 clients, 5 of them with no data): the
+  server selects only clients that have training rows; evaluation and
+  metadata are written.
+* Partitioner feasibility (a property of the code, not a result): with
+  560,000 balanced labels, N = 100 and alpha = 0.1, 0 of 200 per-class
+  Dirichlet draws give every client at least 10 rows.
+
+No number from these checks may be reported.

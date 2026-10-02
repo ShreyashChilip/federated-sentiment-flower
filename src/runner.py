@@ -29,6 +29,10 @@ def run_federated(cfg: dict, seed: int, run_dir=None, create_partition: bool = F
 
     run_dir = Path(run_dir or run_directory(cfg, seed, cfg["fl"]["algorithm"]))
     prepare_run(cfg, seed, run_dir, create_partition)
+    # The client count comes from the saved partition (natural clients are
+    # defined by the data, not by the config).
+    with open(run_dir / "run_metadata.json", "r", encoding="utf-8") as f:
+        num_clients = int(json.load(f)["partition"]["client_count"])
     sim = cfg.get("simulation", {})
     backend = {"client_resources": {"num_cpus": float(sim.get("client_cpus", 1)), "num_gpus": float(sim.get("client_gpus", 0.0))}}
     if sim.get("ray_cpus"):
@@ -36,7 +40,7 @@ def run_federated(cfg: dict, seed: int, run_dir=None, create_partition: bool = F
     run_simulation(
         server_app=make_server_app(run_dir),
         client_app=client_app,
-        num_supernodes=int(cfg["partition"]["num_clients"]),
+        num_supernodes=num_clients,
         backend_config=backend,
     )
     if not is_complete(run_dir):

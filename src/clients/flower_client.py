@@ -11,7 +11,7 @@ import torch
 from flwr.app import ArrayRecord, ConfigRecord, Context, Message, MetricRecord, RecordDict
 from flwr.clientapp import ClientApp
 
-from src.clients.trainer import evaluate, local_train
+from src.clients.trainer import evaluate, label_prior_offset, local_train
 from src.models.registry import build_model, set_weights
 from src.resources.monitor import peak_vram_mb, rss_mb
 from src.utils.runtime import load_runtime, resolve_device
@@ -31,9 +31,13 @@ def _setup(msg: Message, context: Context):
 def register(msg: Message, context: Context) -> Message:
     """Tell the server which partition this node holds and how large it is."""
     rt, cid = _setup(msg, context)
+    train_rows = rt.client_rows(cid, "train")
     metrics = MetricRecord({
         "client_id": cid,
-        "n_train": int(len(rt.client_rows(cid, "train"))),
+        # Per-class training counts: lets the server form the global label
+        # prior as a sum of client counts (used only by prior_reference=global).
+        "class_counts": np.bincount(rt.y_train[train_rows], minlength=rt.bundle.num_classes).astype(int).tolist(),
+        "n_train": int(len(train_rows)),
         "n_val": int(len(rt.client_rows(cid, "val"))),
         "n_client_test": int(len(rt.client_rows(cid, "client_test"))),
     })
@@ -62,12 +66,19 @@ def train(msg: Message, context: Context) -> Message:
         else:
             extra["c_local"] = [np.zeros_like(w) for w in global_weights]
 
+    base_algorithm = algorithm
+    if algorithm == "fedavg_la":
+        # FedAvg with local label-prior logit correction.
+        base_algorithm = "fedavg"
+        reference = list(conf["global_prior"]) if "global_prior" in conf else None
+        extra["logit_offset"] = label_prior_offset(rt.y_train[rows], rt.bundle.num_classes, reference)
+
     result = local_train(
         model, rt.bundle.x_train[rows], rt.y_train[rows],
         epochs=float(conf["epochs"]), batch_size=int(fl["batch_size"]), lr=float(conf["lr"]),
         momentum=float(fl.get("momentum", 0.0)), weight_decay=float(fl.get("weight_decay", 0.0)),
         seed=derive_seed("batch", rt.seed, cid, rnd), device=device,
-        algorithm=algorithm, mu=float(fl.get("mu", 0.0)), **extra,
+        algorithm=base_algorithm, mu=float(fl.get("mu", 0.0)), **extra,
     )
 
     content = {"arrays": ArrayRecord(numpy_ndarrays=result["weights"])}

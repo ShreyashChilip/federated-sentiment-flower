@@ -136,3 +136,26 @@ a Kaggle session that hits the time limit resumes where it stopped.
   written on Flower's Message API so that sampling, dropout and byte accounting
   are explicit; the weighted aggregation is unit-tested against Flower's own
   `aggregate_arrayrecords`.
+
+## 9. Amendments to protocol version 1
+
+Sections 1 to 8 above are kept as frozen on 2026-10-02. Changes are listed
+here with their date, origin and whether any official result existed. Open
+points are numbered as in `docs/PHASE_0_TO_PHASE_1_AUDIT.md`, section 8.
+
+| # | Date | Amendment | Origin | Official results existed? | Status |
+|---|---|---|---|---|---|
+| A1 | 2026-10-02 | Experiment 0 (0A controlled diagnostic, 0B natural clients) is run before the tuning phase and before the Phase 1 baseline. Its hyperparameters are therefore not tuned and are marked PROVISIONAL in the configs | Author instruction | No | In force; values await approval (D3) |
+| A2 | 2026-10-02 | Experiment 0 uses 8 seeds instead of 5 (decision 6.4, option a). The 0A decision rule reads "all official seeds" in place of "all five seeds" | Author instruction | No | **Seed list not yet supplied** (D1) |
+| A3 | 2026-10-02 | Natural-client data is Amazon Reviews 2023 with two separate client definitions, `user_id` and `parent_asin`, analysed separately and never mixed (resolves decisions 6.1 and 6.2 for Phase 6) | Author instruction | No | In force; category pending (D6) |
+| A4 | 2026-10-02 | 0A is stated to concern ordinary label heterogeneity only. It is not evidence for or against natural-client lexical confounding. This restates the caveat already in section 5 | Author instruction | No | In force |
+| A5 | 2026-10-02 | Pilot runs (seed 0, a few rounds) are allowed before official runs for timing and plumbing. Pilot outputs may not change the protocol | Author instruction | No | In force |
+| A6 | 2026-10-02 | Definition of "candidate client-confounded feature" and of the seen/unseen-client measurements fixed in `docs/CONFOUNDING_DIAGNOSTIC.md` | Preparation work, before any real data was loaded | No | In force |
+
+Not amended, although the audit found problems (they need the authors' decision):
+
+* The Dirichlet redraw rule of section 2 cannot be satisfied for N = 100,
+  alpha = 0.1 (audit M1, decision D2).
+* The 0A decision rule of section 5 uses the raw Spearman correlation, which
+  responds to under-training (audit M4, decision D9).
+* `weight_decay` is 0 (audit M5, decision D3).

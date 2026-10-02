@@ -1,0 +1,25 @@
+# Amazon Reviews 2023 (McAuley Lab), 5-class rating task, natural clients.
+# Source files: raw/review_categories/<category>.jsonl of the Hugging Face
+# dataset McAuley-Lab/Amazon-Reviews-2023 at the pinned revision.
+inherits: base.yaml
+
+data:
+  dataset: amazon2023
+  category: null           # REQUIRED before any run (see the runbook)
+  revision: 2b6d039ed471f2ba5fd2acb718bf33b0a7e5598e   # repository commit on 2026-10-02
+  local_path: null         # tests only: read a local .jsonl instead of the hub file
+  max_records: null
+  client_definition: null  # user_id | parent_asin; set by exp0b_user / exp0b_product
+  client_filter:           # the client-size rule; fixed after profiling, before training
+    min_reviews: null      # REQUIRED: keep clients with at least this many cleaned reviews
+    max_reviews: null      # optional cap per client (seeded subsample)
+    max_clients: null      # optional seeded sample of retained clients
+    filter_seed: 0
+  holdout:
+    unseen_fraction: 0.2   # share of retained CLIENTS held out entirely
+    holdout_seed: 0
+  role_fractions: [0.8, 0.1, 0.1]   # inside each seen client: train / val / client-test
+
+partition:
+  scheme: natural
+  num_clients: null        # defined by the data

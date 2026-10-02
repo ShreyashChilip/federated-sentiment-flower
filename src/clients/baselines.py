@@ -76,6 +76,7 @@ def run_centralized(run_dir) -> dict:
         "model": parameter_counts(model),
         "weights_sha256": weights_sha256(get_weights(model)),
     }
+    np.savez_compressed(run_dir / "final_weights.npz", *get_weights(model))
     _save(run_dir, history=history, final=final)
     return final
 

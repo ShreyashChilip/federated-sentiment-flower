@@ -40,7 +40,13 @@ def git_info(root: Path) -> dict:
     if not top or Path(top).resolve() != Path(root).resolve():
         return {"commit": None, "dirty": None, "note": "project is not a git repository"}
     commit = run("rev-parse", "--verify", "--quiet", "HEAD") or None  # None until the first commit
-    return {"commit": commit, "dirty": bool(run("status", "--porcelain"))}
+    # "dirty" means a TRACKED file differs from the commit, i.e. the code or a
+    # config that produced the run is not the committed one. New untracked
+    # files (freshly created partitions, results) do not change the code and
+    # are counted separately.
+    untracked = [ln for ln in run("status", "--porcelain").splitlines() if ln.startswith("??")]
+    return {"commit": commit, "dirty": bool(run("status", "--porcelain", "--untracked-files=no")),
+            "untracked_paths": len(untracked)}
 
 
 def platform_kind() -> str:
