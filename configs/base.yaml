@@ -1,0 +1,82 @@
+# Base configuration. Every experiment config inherits from this file.
+# Values marked PROVISIONAL are starting points to be fixed by validation-only
+# tuning (EXPERIMENT_PLAN.md, section 4) before any final run.
+
+experiment:
+  name: default
+  seeds: [42, 123, 456, 789, 2026]
+  results_dir: results
+
+device: auto          # cuda if available, else cpu
+client_threads: 1     # torch threads per simulated client
+
+data:
+  dataset: yelp_polarity
+  revision: null      # pin the dataset revision here once fixed on Kaggle
+  cache_dir: data_cache
+  max_train: null     # null = full official train split
+  max_test: null      # null = full official test split
+  subset_seed: 0
+  role_seed: 0
+  role_fractions: [0.8, 0.1, 0.1]   # train / val / client_test, inside official train
+  label_noise: 0.0
+
+features:
+  type: tfidf
+  max_features: 50000   # PROVISIONAL
+  ngram_range: [1, 2]
+  min_df: 5
+  sublinear_tf: true
+
+partition:
+  scheme: dirichlet     # iid | dirichlet | quantity_skew
+  num_clients: 10
+  alpha: 0.1
+  min_client_size: 10
+  dir: partitions
+
+model:
+  name: lr
+
+fl:
+  algorithm: fedavg     # fedavg | fedprox | fedadam | scaffold
+  rounds: 50            # PROVISIONAL
+  fraction_fit: 1.0     # C
+  min_fit_clients: 1
+  local_epochs: 1       # E
+  batch_size: 32
+  optimizer: sgd
+  lr: 0.1               # PROVISIONAL, local learning rate
+  lr_decay: 1.0         # gamma: lr_t = lr * gamma^(t-1)
+  momentum: 0.0
+  weight_decay: 0.0
+  server_lr: 1.0        # PROVISIONAL for fedadam / scaffold
+  mu: 0.0               # FedProx proximal coefficient
+  adam_beta1: 0.9
+  adam_beta2: 0.99
+  adam_tau: 0.001
+  dropout_prob: 0.0     # p: selected client fails after receiving the model
+  straggler_prob: 0.0   # selected client is slow this round
+  straggler_work: 0.5   # fraction of the local epochs a straggler completes
+  straggler_policy: partial   # partial = aggregate partial work | drop = discard
+
+centralized:
+  epochs: 10            # PROVISIONAL
+
+local_only:
+  epochs: 10            # PROVISIONAL
+
+eval:
+  every: 1
+  target_f1: null       # validation macro-F1 target, fixed before final runs
+
+resources:
+  # Declared figures for the energy PROXY (not measurements). Set these to the
+  # values of the Kaggle hardware once recorded in ENVIRONMENT.md.
+  cpu_watts: null
+  gpu_watts: null
+
+simulation:
+  client_cpus: 1
+  client_gpus: 0.0
+  ray_cpus: null

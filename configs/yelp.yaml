@@ -1,0 +1,8 @@
+# Yelp Polarity, official split: 560,000 train / 38,000 test, 2 classes.
+inherits: base.yaml
+
+experiment:
+  name: yelp
+
+data:
+  dataset: yelp_polarity

@@ -1,0 +1,332 @@
+Resource-Efficient Sentiment Classification through Federated Learning: Performance Analysis of FedProx and FedAvg 
+
+Radhika V. Kulkarni1*, Shreyash Chilip2, Vaibhavi Dubal3, Manali Patil4, Aarti Agarkar5, Mandar Karyakarte6
+Department of Computer Engineering, Vishwakarma Institute of Technology, Pune, Maharashtra, India 1,2,3,4,5 
+Indian Institute of Information Technology, Allahabad, India, & Department of Computer Engineering, Vishwakarma Institute of Technology, Pune, Maharashtra, India.6
+
+
+©2016 ACCENTS
+
+Abstract 
+Sentiment analysis is one of the most important techniques to interpret user impressions in businesses, and researchers alike rely on it for making informed decisions. Nonetheless, privacy issues, traditional methods of data exploitation, and the variation of data types produced by users pose a real threat to centralized systems. This paper proposes a framework for privacy-preserving sentiment analysis using Federated Learning (FL) that allows collaborative model building while keeping data privacy intact. To tackle the challenges of non-Independent and Identically Distributed (non-IID) [2.3] data distributions and communication bottlenecks, this research conducts a systematic study of the effectiveness of Wi-Fi (Wireless Fidelity) enabled devices by comparing the performance of FL Algorithms, Federated Averaging (FedAvg), and Federated Proximal (FedProx), and demonstrates their application to decentralized and non-uniform datasets. It evaluates the effectiveness of the proposed FL system by measuring sentiment classification accuracy, precision, and F1-score on the Yelp Polarity Reviews dataset. The empirical study demonstrates that FedProx outperforms FedAvg, especially in heterogeneous situations where resources such as model convergence and communication efficiency are lower. Additionally, it evaluates the degree of resource expenditure and outlines its usability to illustrate the advantage of FL over centralized systems in terms of CPU (Central Processing Unit) usage, cost, and scalability. 
+
+Keywords
+FedAvg, federated learning, FedProx, privacy preservation, sentiment analysis. [2.2]
+
+
+ Introduction
+Background
+Nowadays, people seem to be willing to express their views, feelings, and experiences more than ever before. These texts, whether they are social media posts, product reviews, or customer satisfaction feedback forms, contain a lot of information about how people feel, be it positive, negative, or neutral. The analytics of emotion saves a lot, both effort and time. Interpretation of emotional data is so easy with sentiment analysis that it has become an important part of business management for decision makers, researchers, and even social media platforms. Sentiment helps in making data-driven decisions, spotting new user trends, and fixing user problems. Unfortunately, the increasing amounts of user-generated data have rendered traditional approaches to sentiment analysis obsolete regarding privacy and data protection issues. Recent surveys and empirical analyses confirm FL’s growing impact on natural-language processing and edge intelligence, highlighting its suitability for privacy-sensitive sentiment applications [1], [2]. State-of-the-art work further demonstrates how adaptive aggregation, clustering, and server-assisted strategies improve convergence under heterogeneous data conditions [3],[4],[5].
+
+Challenges [1.2]
+There are three major challenges in deploying FL for real-world sentiment analysis despite its promise.
+First, the statistical heterogeneity and non-IID client data induce client drift and unstable aggregation, leading to a degraded generalization accuracy [3], [4].
+Secondly, scalability is limited because of restricted communications and resources between distributed devices and the server, which produces trade-offs in convergence speed, energy efficiency, and model precision [5],[6],[7].
+Third, while decentralized FL inherently enhances data privacy, privacy guarantees remain partial unless complemented by cryptographic or differential privacy mechanisms, which often add significant computation and communication overhead [4], [8].
+Overcoming these challenges requires empirical benchmarking of FL algorithms under realistic non-IID, resource-constrained, and communication-limited settings, a key motivation for this work.
+
+Objectives of the Paper
+This research paper makes the following contributions:
+Evaluation and comparison of the performance of FL approaches like Federated Averaging (FedAvg) and Federated Proximal (FedProx) in heterogeneous data environments
+Enhancement in sentiment classification in decentralized settings with privacy preservation
+Evaluation of the scalability and resource efficiency of FL in real-world sentiment analysis.
+
+Contributions [1.2]
+This study provides an end-to-end assessment of federated learning for sentiment analysis with the two widely used aggregation techniques, FedAvg and FedProx, under heterogeneous, non-IID data conditions. It quantifies the convergence behavior, communication overhead, and energy efficiency on identical hardware. From these, practical insights for real-world scalability have been discussed. Results evidence that FedProx has better stability in unbalanced client environments and faster convergence, and also that FL allows achieving near-centralized accuracy while preserving user privacy and optimizing resource utilization.
+
+Paper Organization
+Section 2 surveys related work on federated learning for NLP and methods addressing non-IID data. Section 3 describes the datasets, model architectures, and experimental setup. Section 4 presents results on accuracy, convergence, and communication metrics. Section 5 discusses implications and limitations, and Section 6 concludes with future directions. [1.2]
+
+ Literature Review
+FL [2.3] [9] advertising is a machine learning (ML) technique that allows a specific model to be trained in a decentralized way without direct access to the user’s data. This has already advanced considerably in numerous fields, and there are steps to extend its application to sentiment analysis.  Recently, the research in [10] presents one of the foremost works on aspect-based FL, where topic memories are used to improve the performance of the model when analyzing sentiments. Adding the technology-specific topic memories, it proves that models can reason about sentiments and other aspects across what can be considered non-homogeneous datasets.
+
+Blockchain FL [11] is deemed an extra advanced approach as it increases security and transparency. It performs a holistic review of the literature on FL and reports how the technology can assist in solving the issues of privacy and can increase trust in decentralized systems. The two application areas in [12], FL and light-weight CNN (Convolutional Neural Network) models, prove how light-weight architectures can be applied in FL to analyze crowd emotion and behavior. This work proves the feasibility of FL in analyzing intricate emotional information, further enhancing its potential for sentiment analysis in dynamic scenarios. Speaking of sentiment analysis, privacy issues can be a major concern when extracting opinions from social media, which is addressed in the paper [13], proposing an FL architecture to combat global issues such as COVID-19. Its key contribution was to highlight the significance of FL in solving practical problems and its potential in distributing training data. Federated deep learning (DL) is the focus of the work in [14], which also investigates IoT cybersecurity. Though their main focus is on the area of privacy, they lay out the principles of FL. With privacy shielding being one of them. Well-known FedProx and FedAvg aggregation methods are seen in the privacy-preserving healthcare diagnostic model in [15], which manages the irregularly distributed nature of the data. Authors in [16] proposed an FL-powered way of dissecting human sentiments and physical movements in the midst of a disaster, and showed FedProx and FedAvg being used to tackle the issue of non-IID data. A paper [17] proposed an FL-based approach to sentiment analysis, zeroing in on the problems of heterogeneity and using edge devices, along with pruning, freezing, and FedProx and FedAvg, and found that structured pruning can deliver high accuracy in some medical diagnostics even when the data is highly heterogeneous. In [18], the authors looked into how non-IID data affects the functionality of FL models that are used for sentiment analysis, and the paper in [19] proposed an FL framework that uses the Enhanced LinkNet (EnLNet) model for sentiment analysis that covers text, audio and visual, and with the assistance of feature extraction techniques such as MFCC for voice signals and IAAM for images, which has given them remarkably good results without compromising on data privacy. This represents one of the most significant advancements in FL for handling diverse and complex datasets with regard to sentiment analysis, especially on mental health. One such contribution is discussed in [20], where the authors describe a BERT-based privacy-preserving FL paradigm combined with a new data obfuscation technique. It reports the possibility of local censorship with high accuracy in the emotion categorization task. The framework was resilient even with sophisticated privacy attacks, thus further enhancing its reputation as practical for real-world problems. The work in [21] aims at making a tuning between differential privacy and FedProx to handle both privacy and heterogeneity. As FL has evolved, its impact in various fields has become more pronounced. Results are presented in [22] from transforming some real-world privacy-aware AI applications to FL, though there are various issues associated with communication overhead and scalability. In [23], authors extensively review current systematic FL in NLP, with a key emphasis on challenges related to convergence, attack vectors that induce security and privacy vulnerabilities, and best practices regarding privacy-sensitive textual data management in federated systems. Their findings emphasized that FL has the potential to overcome challenges regarding privacy for improved sentiment classification performance on various linguistic datasets.
+In [24] authors suggest a spatial FL approach to analyse the sentiment on stock news stored in a blockchain that uses DL, ML,[2.3], and dictionary look-up methods. It shows the possibility of efficient attitudinal model federation to process data that is distributed over a wide geographical area. The study in [25] introduces Federated Active Learning (F-AL) to optimize annotation strategies and reduce communication overhead in FL systems. It emphasizes how state-of-the-art learning methodologies can address subtle emotional expressions, which further ratifies the efficiency of the sentiment analysis system based on FL. The comparative study of centralized vs. FL performance proposed in this paper echoes the issues and opportunities identified by the authors in [26]. Their work emphasizes the conflicts in the performance and privacy trade-off when dealing with sentiment analysis. A detailed survey on sentiment and emotion analysis is available in [27], which highlights the use of ML and NLP for emotional connotation extraction from text data. It brings forth the issue of handling informal language, sparsity of data, and computational overhead, each of critical importance for sentiment analysis using FL. It explains how hybrid methods that combine lexicon-based techniques and ML can overcome the shortcomings of classic sentiment analysis methods, particularly in a non-IID data scenario. Similarly, research in [28] proposes an Elephas-Kiboko optimized CNN for recommendation systems in movies, demonstrating the applicability of bio-inspired optimization techniques to advance model performance and handle dynamic user preferences. For example, their usage of aggregate distance metrics (integration of Bhattacharya and Euclidean distances) for the comparison of movie similarities can be similarly utilized for comparing similarities of sentiments in federated environments, especially in handling non-IID data distribution. Their findings also stress the importance of adaptive processes in controlling the exploration and exploitation phases, an integral component in optimizing FL models in sentiment analysis tasks. The research in [29] shows how recurrent models can greatly enhance sentiment classification efficiency in decentralized systems, which makes them an essential component of FL-based sentiment analysis. Aspect-based sentiment analysis has also been gaining increasing interest, particularly for non-English languages. A systematic review in [30] discusses Arabic aspect-based sentiment analysis, presenting core methodologies, issues, and areas of future work. Their findings highlight the capacity of FL to combat privacy issues with improved sentiment classification accuracy on different linguistic datasets.
+In 2023–2025, the research community converged towards two pragmatic approaches to federated sentiment analysis: (1) favor lean, resource-scarce models (TF-IDF + low-weight classifiers, tiny CNN/RNN) for highly resource-constrained clients; or (2) enable transformer-level understanding in FL through parameter-efficient tuning, pruning, and compression—presumably at the expense of more intricate engineering. Privacy (DP / secure aggregation) and realistic on-device resource profiling remain open needs. This paper follows the first approach and discusses the comparison of a resource-conscious TF-IDF + logistic baseline model learned in FedAvg/FedProx, along with both accuracy and system-wide resource consumption, hence responding to the literature call for explicit resource vs. utility trade-offs. [1.3]
+ Methodology
+The proposed system uses FL to train a sentiment analysis model with privacy preservation. It considers the following client-server architecture: the client device trains the local models on a given dataset locally and sends their weights to the server. However, the server aggregates the weights received from the local clients and updates the whole global model, which is again sent back to the clients for further improvement of the learning at the local level. We consider three experimental configurations: A centralized TF-IDF + Logistic Regression model trained on the complete dataset, which serves as the upper bound on performance. A purely local setup where each client trains independently on its non-IID partition without parameter aggregation provides a lower bound and serves to highlight the impact of data isolation. Federated TF-IDF + Logistic Regression models trained with both FedAvg and FedProx allow us to explore the effects of statistical heterogeneity and the role of proximal regularization, respectively. Taken together, these configurations capture the essential trade-offs between centralized efficiency and decentralized privacy preservation. Transformer-based models, such as centralized or federated DistilBERT/BERT, are not considered in the present work as we focus on resource-efficient classical models and constrained compute environments. However, they would represent a natural extension in future work aimed at generalizing these findings to deep contextual architectures. [1.7]
+
+All experiments were conducted as a single-machine simulation rather than on physical devices or virtual machines. We simulated 10 clients sequentially on a Windows 11 platform, running on a machine with an AMD Ryzen 5 5600H CPU (6 cores, 12 threads), 24 GB DDR4 RAM (dual-channel, 3200 MHz), and an NVIDIA RTX 3050 GPU with 4 GB VRAM. CPU usage was tracked via the psutil library. The federated learning setup used a custom implementation of FedAvg and FedProx with Logistic Regression models over TF-IDF features. Communication costs were calculated based on model parameter sizes (~38.15 MB per experiment), without explicit network latency, bandwidth limitations, or failures apart from client dropouts. Aggregation was performed via weighted averaging based on client sample sizes. This environment emphasizes controlled, reproducible evaluation of algorithmic performance, communication efficiency, and the effects of statistical heterogeneity rather than realistic distributed hardware deployment. [1.10,1.9]
+The system architecture in Figure 1 shows an FL framework coupled with a client-server model that allows collaborative training without violating user privacy. The entire procedure of local training, model aggregation, and global model updating is repeated for several rounds of communication, or epochs, till the global model converges into an optimal state. Convergence is usually measured in terms of accuracy, loss, or validation performance over the server-side dataset. 
+The global model is initialized with weights wt at the central server. Each client i ∈{1,2,…, N} has its own local dataset Di consisting of feature-label pairs (xi,yi). In this study, FedAvg and FedProx were chosen for their proven stability and efficiency in non-IID data scenarios common in federated environments. FedAvg is a simple baseline that has low communication cost, whereas FedProx has a proximal regularization to reduce client drift due to heterogeneous updates. This setting balances simplicity, scalability, and robustness for non-uniform sentiment datasets.
+To simulate more realistic device heterogeneity, the dataset was split across 10 clients; each client represents an independent device or node with unique features of data. Real-world decentralized networks naturally take this form of a system: not every node has an equal amount of data. Subsequently, the data were divided by stratified sampling into 70% for training, 20% for validation, and 10% for testing, maintaining class balance in order to ensure fair performance testing among the different clients. This allows for reproducibility and stable convergence under heterogeneous conditions.  [2. 0][2. 10] 
+In a communication round, the participation fraction for the clients was taken to be C = 0.5; this indicated that half of the clients contributed to the updates in a way that balanced their diversity with efficiency in communication. The selected clients were further trained for E = 5 local epochs with a batch size of 32, using SGD with momentum 0.9 to provide stability and interpretability in federated settings. Locally, the learning rate started at η _ local = 0.01 and decayed linearly to 0.001 within 50 rounds, whereas the global rate followed the relationship η _ t = η ₀ × γ ^ (⌊ t/5 ⌋) with γ = 0.98 to ensure smooth convergence. Following the protocol for FedAvg/FedProx, one global update was maintained per round.
+For FedProx, a μ grid search was done ∈{0.0, 0.01, 0.1, 1.0} under moderate heterogeneity (α = 0.5, 5). Client 0.1 was simulated with random deactivation (p = 0.1) each round to mimic real-world intermittency. We used three fixed random seeds (42, 123, 456) for reproducibility. We report the mean and standard deviation of F1-scores and accuracy across these seeds. While we do not perform any formal confidence intervals or statistical tests using Wilcoxon, the mean ± standard deviation gives a clear view of the variability in performance and allows us to make consistent comparisons between FedAvg and FedProx in heterogeneous data conditions. [1.6    1.8]
+While this study ensures that the raw user data does not leave the local devices during FL, it does not incorporate advanced privacy-preserving mechanisms like secure aggregation or differential privacy. Thus, the presented system's privacy protection is restricted to data locality, and model updates submitted to the central server may be partially exploitable under strong adversarial conditions. Future work on this could integrate secure aggregation with formal guarantees regarding differential privacy to further enhance the resistance provided against gradient inversion and membership inference attacks without compromising model utility. [1.14]
+Equation (1) represents a weighted sum of each client's local objective function Fi(w), where the weight |Di|/|D| is proportional to each client's dataset size relative to the total dataset. Equations (2) and (3) [2.5] represent the client objective functions for FedProx and FedAvg, respectively, with FedProx introducing the regulatory term.
+
+                                                        (1)
+(2)
+                      (3)
+
+Where ℓ(f(x;w),y) is a loss function (e.g., logistic regression loss for binary classification), μ is a regularization parameter controlling the weight of the proximal term, and wt is the global model weight at round t.
+
+Each client solves the objective locally for t epochs as shown in equation (4). Equations (5) and (6) [2.5] represent the 
+
+Figure 1 Federated system architecture for sentiment analysis
+Client update functions for FedProx and FedAvg, respectively.
+
+                                          (4)
+
+Gradient-based updates for :
+(5)
+                         (6)
+
+Where η is the learning rate and ∇w is the gradient with respect to w.
+
+The central server aggregates client updates using weighted averaging as formulated in equation (7) [2.5]. The global learning rate ηg​​ decays at each round as given by equation (8). [2.5]
+
+                  (7)
+                                                           (8)
+
+Where, ηg is the global learning rate, ∣Di​∣/∣D∣ is the weighting factor based on the proportion of data at each client, and γ is the decay factor (e.g., γ =0.95). 
+
+For sentiment prediction, the input text reviews are transformed into vectorized representations x using Term frequency–inverse document frequency (TF – IDF) using equation (9)[2.5], and logistic regression predicts sentiment as given in equation (10) [2.5].
+
+ x = TF−IDF(text)                                                    (9)
+y = sigmoid(wTx+b)>0.5                                      (10)
+where y = 1 represents positive sentiment, y = 0 represents negative sentiment, and b gives a bias term.
+
+Results 
+The Yelp Polarity Reviews dataset obtained from the Yelp Dataset Challenge in 2015 is employed in this study. It is a binary sentiment analysis benchmark dataset containing 598,000 Yelp user reviews, each classified as positive (labelled 1) or negative (labelled 0). For the proposed system, the dataset is divided into 70% training (418,600 reviews), 20% validation (119,600 reviews), and 10% test (59,800 reviews) sets to have balanced class distribution using stratified sampling. This split allows for efficient model training, hyperparameter optimization, and fair evaluation, which is perfect for training and testing sentiment analysis models on user text. The balanced nature of the dataset and structured splits guarantee accurate and generalizable results. To simulate an appropriate FL environment, the dataset is distributed across 10 clients in a non-IID manner to reflect real-world data heterogeneity, as shown in Table 1. Table 1 reports the representative client-level data allocation under Dirichlet-based partitioning for random seed 42. Similar non-IID patterns are obtained for the other seeds (123 and 456), with total sample counts fixed across all seeds to ensure comparability. [1.4] It provides a realistic and challenging FL environment, enabling the evaluation of model robustness, scalability, and adaptability to uneven data distributions. 
+Table 1 Distribution of data samples among clients
+| Clients | 1 | 2 | 3 | 4 | 5 |
+| Samples | 60,276 | 55,399 | 52,416 | 75,839 | 49,456 |
+| Clients | 6 | 7 | 8 | 9 | 10 |
+| Samples | 41,318 | 45,787 | 52,975 | 59,937 | 66,597 |
+
+[1.4]
+To model realistic non-IID data across clients, we adopt a Dirichlet distribution–based partitioning approach. The Dirichlet distribution enables controlled variation of label skew through its concentration parameter α, allowing systematic study of heterogeneity effects. For each class , client proportions are drawn from , where Is the number of clients.
+Smaller α values (e.g., 0.1) yield highly imbalanced local datasets dominated by one or two classes, while larger values (e.g., 10.0) approximate the IID setting. A minimum of ten samples per client is enforced for valid updates, and random seeds ensure reproducibility (42, 123, 456).
+Experiments span four heterogeneity levels, α = {0.1, 0.5, 1.0, 10.0}—ranging from extreme to near-IID regimes. Whereas the detailed plots for α = 1.0 and 10.0 are suppressed for brevity, the convergence patterns were found to be similar in both, further confirming the stability of their behavior near IID, in a manner consistent with the trends reported here. This partitioning reflects real-world data heterogeneity due to user typing patterns or demographic biases, yet it is statistically sound and reproducible. [1.5] As shown in Figure 2, as α grows, both accuracy and F1-score increase, corresponding to easier convergence when conditions are closer to IID. In highly non-IID settings (α = 0.1), both methods degrade due to severe class imbalance, though FedProx remains slightly more stable, confirming the benefit of its proximal term.
+At moderate heterogeneity (α = 0.5–1.0), the performance gap narrows, and both algorithms achieve comparable results. When data become nearly IID (α = 10.0), FedAvg and FedProx converge to similar performance, indicating that FedProx mainly improves training stability in highly skewed distributions. These trends align with established findings in federated optimization, highlighting the trade-off between data diversity and aggregation stability.  [1.4, 1.5]
+
+Figure 2 Impact of data heterogeneity (α) on final model accuracy and F1-score for FedAvg and FedProx [1.5]
+
+Tables 2, 3, and 4 report accuracy, precision, and F1-score performance, respectively, of the FL model over progressive training rounds with different settings of clients. From Tables 2, 3, and 4, it is inferred that training round counts and client engagement substantially improve model performance in the context of an FL setup. For FedAvg, as well as FedProx, at first, accuracy, precision, and F1-score are fairly low, but steadily improve significantly at round 50, where FedProx consistently outperforms FedAvg. The generalization improves when more clients (10 compared to 3) are added because varied data from various sources contribute to a strong model that causes higher precision, F1-score, and accuracy for both cases. However, after about 30 rounds, the improvement plateaus, and this means that between 30 to 50 rounds, this is indeed the optimal training window. This basically implies the trade-off between cost-effectiveness and performance improvement in FL. It emphasizes that effective resource planning must be performed. While increasing training rounds and clients will improve the model's performance, the law of diminishing returns beyond a certain point may result in inefficient use of computational and communicational resources. The balance between the two factors has to be met for resource-efficient development of FL systems, especially under constrained environments.
+
+Table 2 Accuracy percentage across training cycles with various client configurations
+| Rounds | Clients | Accuracy (%) |
+|  |  | FedAvg | FedProx |
+| 0 – 5 | 3 | 75.23 | 78.49 |
+|  | 5 | 76.18 | 79.25 |
+|  | 10 | 78.36 | 81.14 |
+| 6 – 10 | 3 | 78.51 | 81.68 |
+|  | 5 | 79.47 | 82.32 |
+|  | 10 | 81.26 | 84.09 |
+| 10 – 20 | 3 | 81.74 | 84.93 |
+|  | 5 | 83.08 | 86.14 |
+|  | 10 | 85.42 | 88.25 |
+| 21 – 30 | 3 | 83.95 | 87.06 |
+|  | 5 | 85.61 | 88.92 |
+|  | 10 | 88.13 | 90.72 |
+| 31 – 50 | 3 | 86.58 | 89.57 |
+|  | 5 | 88.34 | 91.27 |
+|  | 10 | 90.06 | 93.12 |
+
+
+Table 3 Precision% over training rounds with different client settings
+| Rounds | Clients | Precision (%) |
+|  |  | FedAvg | FedProx |
+| 0 – 5 | 3 | 72.84 | 75.69 |
+|  | 5 | 74.09 | 77.01 |
+|  | 10 | 76.37 | 79.18 |
+| 6 – 10 | 3 | 76.71 | 79.54 |
+|  | 5 | 78.04 | 80.98 |
+|  | 10 | 80.12 | 83.13 |
+| 10 – 20 | 3 | 80.45 | 83.67 |
+|  | 5 | 82.25 | 85.49 |
+|  | 10 | 84.37 | 87.38 |
+| 21 – 30 | 3 | 82.92 | 86.04 |
+|  | 5 | 84.78 | 87.85 |
+|  | 10 | 87.15 | 89.96 |
+| 31 – 50 | 3 | 85.26 | 88.59 |
+|  | 5 | 87.34 | 90.57 |
+|  | 10 | 89.27 | 92.21 |
+
+Table 4 F1-score % over training rounds with different client settings
+| Rounds | Clients | F1-score (%) |
+|  |  | FedAvg | FedProx |
+| 0 – 5 | 3 | 73.51 | 76.23 |
+|  | 5 | 74.68 | 77.59 |
+|  | 10 | 76.95 | 79.84 |
+| 6 – 10 | 3 | 77.12 | 80.07 |
+|  | 5 | 78.46 | 81.39 |
+|  | 10 | 80.71 | 83.58 |
+| 10 – 20 | 3 | 81.14 | 84.32 |
+|  | 5 | 82.89 | 85.98 |
+|  | 10 | 85.07 | 87.94 |
+| 21 – 30 | 3 | 83.42 | 86.53 |
+|  | 5 | 85.17 | 88.26 |
+|  | 10 | 87.64 | 90.47 |
+| 31 – 50 | 3 | 85.79 | 88.89 |
+|  | 5 | 87.93 | 90.96 |
+|  | 10 | 89.86 | 92.73 |
+
+
+Figures 3, 4, and 5 present the accuracy, precision, and F1-score of the global FL model with 3, 5, and 10 clients, respectively. The representative advantage brought by diverse data participation is evidenced by consistently higher scores for models with more active clients. Each curve rises sharply during the first few rounds and flattens out after around 20, indicating the early convergence of the global model. Improvement in all metrics becomes very negligible beyond round 30, which represents steady learning with little communication overhead. Greater participation by clients improves generalization and reduces update fluctuation: the 10-client setup provided the best accuracy, precision, and F1-score, followed by 5 and 3 clients, respectively. [2.10]
+
+
+Figure 3 Accuracy of the global FL model
+ 
+
+Figure 4 Precision of the global FL model
+
+
+Figure 5 F1-score of the global FL model
+
+Table 5 represents the distribution of classes across 10 clients used in this empirical study. Data samples of positive and negative classes are unevenly distributed over the clients. A few clients have moderately imbalanced data, and a few have extremely imbalanced data. This heterogeneity of data, in itself, is such a challenge to FL. It leads to communication inefficiency. 
+Table 5 Class Class-wise data heterogeneity across different clients
+| Client | Positive Class % | Negative Class % |
+| 1 | 42 | 58 |
+| 2 | 65 | 35 |
+| 3 | 64 | 36 |
+| 4 | 60 | 40 |
+| 5 | 30 | 70 |
+| 6 | 24 | 76 |
+| 7 | 66 | 34 |
+| 8 | 67 | 33 |
+| 9 | 34 | 66 |
+| 10 | 28 | 72 |
+
+We also conducted experiments to simulate skewed sample sizes, mild label noise (2% random label flips), and client dropouts (10% random deactivation probability per round) for the purpose of robustness evaluation. These settings approximate common annotation inconsistencies and communication disruptions in distributed environments.
+FedProx was more robust to the variability in participation, with lower performance variance between clients of σ = 0.021 F1 compared to FedAvg (σ = 0.034 F1). Fairness associated with FL can be identified by dispersion in per-client accuracy, ranging between ± 3% and ± 6% for heterogeneous partitions. Global metrics remained within 1-2% of the baseline despite these perturbations, reflecting the robustness of the proposed framework in the absence of extra regularization or resampling techniques. [1.12]
+The plot in Figure 6 demonstrates the global model accuracy over communication rounds for different client configurations (3, 5, and 10 clients). The accuracy tends to converge over the rounds of communication and shows that the model successfully learns from the distributed data. The more clients engaged, the quicker the model attained its best accuracy, suggesting higher efficient communication.
+
+Figure 6 Communication efficiency in FL
+Figures 7 and 8, respectively, show the convergence of sentiment analysis accuracy of FedAvg and FedProx models across various settings of the number of clients. These FL models are compared with their counterparts of centralised global model learning, as depicted in Figures 7 and 8. Also, they represent the global model convergence through a black bold line. It can be inferred, FedProx has a more consistent and smoother learning curve than FedAvg, when tested with the same settings, due to the introduction of the proximal term. [2.10] 
+
+Figure 7 Model convergence across clients (FedAvg)
+
+
+Figure 8 Model convergence across clients (FedProx)
+The results visible in Figure 9 indicate that the federated model trained using FedProx presents comparable performance with the central model, although the distributed heterogeneous data and the communication limitation exist. The relatively better prediction performance of the centralized method over FL with FedProx is predictable considering the entire dataset's accessibility to the centralized model. But the federated model performs equivalently despite complexities such as data distribution, communication constraints, and privacy issues. This minimal loss in accuracy is worth FL's larger benefits: privacy protection (data remains on local devices), greater security (no single point of failure), and scalability (utilizing edge devices). FL is, therefore, best-suited for dynamic, privacy-critical applications, since non-IID data is supported and real-time learning is possible. FedProx's success shows that FL can compromise accuracy in favor of scalable, ethical, and secure AI deployment, emphasizing that in practical scenarios, pragmatic benefits from this usually outweigh minor accuracy improvements.
+
+FedProx consistently performed the same as or slightly outperformed FedAvg for various random seeds and heterogeneity settings. For instance, FedProx attained 0.726 ± 0.163 accuracy and 0.671 ± 0.234 F1 in extremely non-IID conditions (α = 0.1), whereas FedAvg achieved 0.710 ± 0.162 accuracy and 0.649 ± 0.234 F1, demonstrating the stabilizing effect of the proximal term when client data distributions are highly skewed. Similarly, FedProx reached 0.833 ± 0.038 accuracy and 0.830 ± 0.041 F1 in moderately non-IID conditions (α = 0.5), marginally outperforming FedAvg's results of 0.831 ± 0.062 accuracy and 0.826 ± 0.068 F1. The differences were slight but consistent, with FedProx showing smoother convergence across seeds even for near-IID scenarios (α = 1.0). Taken together, these results demonstrate that the proximal regularization term stabilizes performance without sacrificing performance when the data is almost balanced and minimizes client drift, particularly when local datasets are heterogeneous. By reducing client drift when data is heterogeneous while allowing adequate local adaptation, a FedProx proximal term of μ = 0.1 consistently produced the best trade-off between stability and performance, outperforming both FedAvg (μ = 0.0) and larger values of μ. [1.8, 1.11] The key behavioral differences for various client and round configurations are reflected in the comparison between FedAvg and FedProx shown in Tables 2-4. Because of the additional proximal term, which efficiently regularizes local updates and lowers client divergence, FedProx continuously achieves higher accuracy, precision, and F1-score across all rounds.
+Despite being simpler, FedAvg exhibits somewhat slower convergence, particularly in non-IID settings. As can be seen, FedProx maintains greater stability and shows smoother learning curves (Figures 7-8) as the number of clients rises from 3 to 10. This implies that FedProx is better suited for tasks involving heterogeneous federated sentiment analysis, where client variability and data imbalance are present by nature.
+Overall, FedProx offers better performance and communication efficiency without appreciably raising computational costs, while both approaches validate the viability of federated sentiment classification. [2.0]
+
+
+Figure 9 Accuracy performance of centralized versus FL (FedProx)
+The proposed study's resource utilization analysis shows that the centralized and FL approaches differ significantly. The comparison of memory and CPU (Central Processing Unit) utilization at Instance I1 in the federated and centralized training is shown in Figure 10. According to this empirical study, centralized systems require higher CPU utilization, frequently approaching full capacity. On the other hand, this study shows that FL systems achieve similar performance with much lower CPU usage. As depicted in Figure 10(a), the CPU usage in the centralized learning reaches a consistent peak of 100% at several intervals, indicating maximum CPU utilization during processing. It has periodic drops but still averages above 70-80% in many sections. However, as shown in Figure 10(b), the CPU utilization in FL peaks at ~100% for short durations and overall spends more time in lower ranges, often dropping close to 0% in idle phases. The average CPU usage is significantly lower compared to the centralized system, staying between 10-50% during most of the intervals. Memory usage remains steady at ~20% throughout the duration for both scenarios.	
+Each FL communication round transfers model parameters of approximately 38.15 MB per uplink and an equal size for the downlink, corresponding to the TF–IDF + Logistic Regression model weight vector. The cumulative transfer to reach the best observed F1-score (≈ 92.7 %) is therefore about 3.8 GB over 50 rounds across all clients.Wall-clock time per round averaged 37 s for FL and 31 s for centralized training, measured on the same Windows 11 workstation (AMD Ryzen 5 5600H, 24 GB RAM, RTX 3050 GPU). Using a simple energy proxy (CPU active time × TDP ≈ 45 W), the total estimated energy consumption is ≈ 83 kJ for FL and ≈ 70 kJ for centralized training. While FL incurs a ~20 % higher proxy energy cost due to longer per-round duration and intermittent client aggregation phases, it benefits from improved scalability and reduced peak utilization on individual devices. This controlled measurement framework quantifies the communication and temporal costs of FL and demonstrates that the federated approach achieves near-centralized performance with modest additional transmission and energy overhead. [1.9]
+The advantages of FL's reduced resource consumption are significant. First, it promotes scalability due to the distribution of computation cycles across several clients, thus preventing any single node from becoming very busy and thereby reducing the bottleneck commonly affecting central systems. This is particularly useful in large-scale applications where resource constraints cause central systems to malfunction. Secondly, lower CPU utilization automatically implies lower power consumption for FL, making it more economical and greener, especially in resource-constrained environments. The third advantage of FL is its idle times, where CPU utilization drops almost to zero. It shows how intermittent computation, suitable in an environment with tasks that change workloads, can further increase the efficiency of FL systems. What's more, FL isn't compromising memory efficiency while doing so-both federated and centralized environments log consistent memory consumption of about 20%. These advantages make FL a desirable choice for practical implementation with expensive or constrained computing capacity, which corresponds to the growing demand for effective and decentralized solutions of edge computing. Besides improving the scalability and sustainability by reducing the overhead on the centralized infrastructure, FL provides a sound basis for deploying ML models in resource-constrained settings.
+
+
+                     				          (b)
+Figure 10 Instance I1's memory and CPU usage: (a) Federated training (b) Centralized training
+
+
+Discussions
+Experimental results of the proposed framework of federated sentiment analysis demonstrate how well the framework strikes a balance among resource efficiency, data privacy, and model performance. Comparing these two configurations clearly reveals some evident trade-offs; it indicates that federated learning achieves comparable performance with much lower computation and energy costs, while centralized learning offers slightly higher accuracy due to complete data availability and continuous resource utilization. This means that FL can unleash new potential for real-world applications in which privacy is crucial, especially for those applications that require only a limited amount of shared data or dispersed computational resources.
+In all experiments, FedProx performed superior to FedAvg under heterogeneous data conditions, yielding convergence that was much smoother and faster with less client drift. FedProx offers additional stability because of the proximal term when clients have different label distributions or volumes of data. Our results indicate that FedProx is more suitable for realistic large-scale federated deployments, and that regularized aggregation mechanisms are fundamental to preventing performance degradation in settings that are not IID.
+Even considering these advantages, a few disadvantages are still outstanding: the current study emulated a federated setup using a single workstation instead of a real network of distributed devices. This greatly limits the ability to realistically assess hardware variability or real-world communication latency. Second, formal quantification of privacy protection was limited due to the lack of integrated sophisticated privacy techniques, such as secure aggregation or differential privacy. The future implementation could close these gaps by actually deploying on real-world federated nodes and incorporating privacy-preserving protocols in order to understand the trade-off that will occur in model accuracy and communication efficiency. [1.16]
+
+Conclusion and future work
+This work contributes to the state of the art in the domain of FL on sentiment analysis while preserving user privacy and tackling non-IID data challenges. The performance comparison of FedAvg with FedProx has proved that FedProx performs better in data environments heterogeneous in nature. The proposed system overcomes user data security concerns by facilitating decentralized training, making it easier to build an effective model on the local client and share only the weights of the ML model, not user data, with the server. The results also prove that FL can maximize accuracy and communication efficiency, considering the problems in data distribution and data heterogeneity. This study has added to the growing body of literature on FL’s applications in privacy-sensitive areas, which increases its potential in real-world ML applications. The centralized system might deliver slightly better performance due to higher resource availability and utilization. The federated system, although slightly less performant, achieves this with significantly lower CPU usage, leading to a much higher return on investment (ROI) as it saves energy costs, hardware wear, and supports scalability. 
+
+Future research work will include studies that investigate extending the studied FL framework to other applications, such as healthcare diagnosis or predictive maintenance in IoT-based systems, to gauge its flexibility. Further studies will expand the experimental evaluation to include more challenging and diverse datasets such as IMDB aspect-based sentiment and Amazon product reviews, as well as non-English corpora (e.g., multilingual sentiment benchmarks) to assess the generalizability of the proposed federated learning framework across linguistic and cultural contexts. [1.13] Experimentation with other FL algorithms like Federated Multi-Task Learning (FMTL), Federated Transfer Learning (FTL), and their deployment in dynamic environments in real-time to confirm their pragmatic resilience. In addition, efficient use of resources by energy-saving algorithms to minimize communication overhead and sophisticated privacy methods to improve security constitute future scope. These paths seek to realize FL's full potential as a scalable, efficient, and privacy-preserving solution for multiple practical applications.
+The comparative evaluation confirms that the proposed FL framework performs reliably even under heterogeneous data distributions.
+
+Conflicts of interest
+The authors have no conflicts of interest to declare.
+
+Author’s contribution [2.9] removed the word “statement”, as mentioned heading asks Author’s contribution
+Radhika V. Kulkarni: Conceptualization, investigation, analysis, and interpretation of results, writing – review and editing. Shreyash Chilip, Vaibhavi Dubal, and Manali Patil: Conceptualization, investigation, data curation, writing – original draft. Aarti Agarkar and Mandar Karyakarte: analysis and interpretation of results, writing, review, and editing.
+
+References
+
+[1] 	Ji S., Tan Y., Saravirta T., Yang Z., Liu Y., Vasankari L., Walid A., “Emerging trends in federated learning: from model fusion to federated X learning,” Int. J. Mach. Learn. Cybern., Springer, 2024, DOI: 10.1007/s13042-024-02119-1.
+	https://doi.org/10.1007/s13042-024-02119-1
+[2]	Luzón M. V. et al., “A tutorial on federated learning from theory to practice: Foundations, software frameworks, exemplary use cases, and selected trends,” IEEE/CAA J. Automatica Sinica, 2024, DOI: 10.1109/JAS.2024.124215.
+	https://doi.org/10.1109/JAS.2024.124215
+[3] 	Mai V. S., La R., Zhang T., “A Study of Enhancing Federated Learning on Non-IID Data With Server Learning,” IEEE Trans. Artif. Intell., 2024, DOI: 10.1109/TAI.2024.3430250.
+	https://doi.ieeecomputersociety.org/10.1109/TAI.2024.3430250
+[4] 	Saeed N. et al., “Comprehensive review of federated learning challenges: A data perspective,” J. Big Data (SpringerOpen), 2025, DOI: 10.1186/s40537-025-01195-6.
+	https://doi.org/10.1186/s40537-025-01195-6
+[5] 	Li X., Gao Y., Deng Y., Jiang X., “Federated Learning With Adaptive Aggregation Weights for Non-IID Data in Edge Networks,” IEEE Trans. Cognitive Commun. Netw., 2025, DOI: 10.1109/TCCN.2025.3534248.
+	https://doi.org/10.1109/TCCN.2025.3534248
+[6] 	Islam M. S., Javaherian S., Xu F., Yuan X., Chen L., Tzeng N.-F., “FedClust: Optimizing Federated Learning on Non-IID Data Through Weight-Driven Client Clustering,” ACM FedClust (preprint arXiv:2403.04144), 2024.
+	https://doi.org/10.48550/arXiv.2403.04144
+[7] 	Cong Y. et al., “FedGA: A greedy approach to enhance federated learning,” Information Sciences, Elsevier (Scopus-indexed), 2024.
+	https://doi.org/10.1016/j.knosys.2024.112201
+[8] 	“Federated Learning in the Age of Foundation Models,” Lecture Notes in Computer Science (LNCS), Springer, 2025, DOI: 10.1007/978-3-031-82240-7.
+	https://doi.org/10.1007/978-3-031-82240-7
+[9]   McMahan HB, Moore E, Ramage D, Hampson S, Arcas Bay. Communication-efficient learning of deep networks from decentralized data. 2016. http://arxiv.org/abs/1602.05629​
+[10]	Qin H, Chen G, Tian Y, Song Y. Improving federated learning for aspect-based sentiment analysis via topic memories. In Proceedings of the 2021 Conference on Empirical Methods in Natural Language Processing. 2021. (pp. 3942–54).
+https://doi.org/10.18653/v1/2021.emnlp-main.321
+[11]	Ning W, et al. Blockchain-based federated learning: A survey and new perspectives. Applied Sciences. 2024;14(20):9459. https://doi.org/10.3390/app14209459
+[12]	Vaniya J, Vahora S, Chauhan U, Vegad S. Crowd emotion and behavior analysis using a lightweight CNN model. SSRG International Journal of Electrical and Electronics Engineering. 2024;11(10):30–46. https://doi.org/10.14445/23488379/IJEEE-V11I10P104
+[13]	Liang W, Chen X, Huang S, Xiong G, Yan K, Zhou X. Federal learning edge network-based sentiment analysis combating global COVID-19. Computer Communications. 2023;204:33–42.
+https://doi.org/10.1016/j.comcom.2023.03.009
+[14]	Ferrag MA, Friha O, Maglaras L, Janicke H, Shu L. Federated deep learning for cyber security in the Internet of Things: concepts, applications, and experimental analysis. IEEE Access. 2021;9:138509–42. https://doi.org/10.1109/ACCESS.2021.3118642  [2.1]
+[15]	Gulati S, Guleria K, Goyal N, Alzubi AA, Castilla AK. A privacy-preserving collaborative federated learning framework for detecting retinal diseases. IEEE Access. 2024;12:170176–203.
+https://doi.org/10.1109/ACCESS.2024.3493946
+[16]	Amin MS, Loh WK. Federated learning-based analysis of human sentiments and physical activities in natural disasters. Applied Sciences. 2023;13(5):2925. https://doi.org/10.3390/app13052925
+[17]	Lin HT, Wen CY. Edge federated optimization for heterogeneous data. Future Internet. 2024;16(4):142. https://doi.org/10.3390/fi16040142
+[18]	Gholamiangonabadi D, Grolinger K. Federated learning for sentiment analysis in the presence of non-IID data: Sensitivity of deep learning models. IEEE Access. 2024;12:128049–60. 
+https://doi.org/10.1109/ACCESS.2024.3453068
+[19]	Vasanthi P, Viswanatham V. Federated learning for multimodal sentiment analysis: advancing global models with an enhanced LinkNet architecture. IEEE Access. 2024;12:175218–39.
+https://doi.org/10.1109/ACCESS.2024.3503290
+[20]	Ahsan SI, Djenouri D, Haider R. Privacy-enhanced sentiment analysis in mental health: Privacy-enhanced sentiment analysis in mental health: federated learning with data obfuscation and bidirectional encoder representations from transformers. Electronics. 2024;13(23):4650.
+https://doi.org/10.3390/electronics13234650
+[21]	Sanjana R, Nikesh M, Bhuvaneshwari M, Bharathi M, Aditya T, Srinivas S. United intelligence: federated learning for the future of technology. Research and Applications of Web Development and Design. 2024; 8(1):1–7.
+https://doi.org/10.5281/zenodo.13933081
+[22]	An T, Ma L, Wang W, Yang Y, Wang J, Chen Y. Consideration of FedProx in privacy protection. Electronics. 2023;12(20):4364.
+https://doi.org/10.3390/electronics12204364
+[23]	Khan Y, Sánchez D, Domingo-Ferrer J. Federated learning-based natural language processing: a systematic literature review. Artificial Intelligence Reviews. 2024;57:320.
+https://doi.org/10.1007/s10462-024-10970-5
+[24]	Sakhare NN, Shaik IS. Spatial federated learning approach for the sentiment analysis of stock news stored on blockchain. Spatial Information Research. 2024;32:13–27. https://doi.org/10.1007/s41324-023-00529-x
+​[25]	Ahn JH, Ma Y, Park S, You C. Federated active learning (F-AL): an efficient annotation strategy for federated learning. IEEE Access. 2024;12:39261–69. https://doi.org/10.1109/ACCESS.2024.3376746
+​[26]	Poria S, Hazarika D, Majumder N, Mihalcea R. Beneath the tip of the iceberg: current challenges and new directions in sentiment analysis research. IEEE Transactions on Affective Computing. 2023;14(1):108–32. https://doi.org/10.1109/TAFFC.2020.3038167
+.​[27]	Nisha, Kumar R. Exploring sentiment and emotion analysis: a systematic review and future directions. SSRG International Journal of Electrical and Electronics Engineering. 2024;11(12):76–93.
+https://doi.org/10.14445/23488379/IJEEE-V11I12P107
+​[28]	Bohra S, Gaikwad A. Integrated distance-based convolutional neural network optimized using Elephas-Kiboko algorithm for movie recommendation. SSRG International Journal of Electrical and Electronics Engineering. 2025;12(2):27–38. https://doi.org/10.14445/23488379/IJEEE-V12I2P104
+[29]	Durga P, Godavarthi D. Deep-sentiment: an effective deep sentiment analysis using a decision-based recurrent neural network (D-RNN). IEEE Access. 2023;11:108433–47. https://doi.org/10.1109/ACCESS.2023.3320738
+[30]	Obiedat R, Al-Darras D, Alzaghoul E, Harfoushi O. Arabic aspect-based sentiment analysis: a systematic literature review. IEEE Access. 2021;9:152628–45. https://doi.org/10.1109/ACCESS.2021.3127140  [2.1]
+
+Author’s PhotoAuthor’s PhotoRadhika V. Kulkarni is presently working as an Associate Professor in the Department of Computer Engineering, Vishwakarma Institute of Technology, Pune, India. She received a Ph.D. degree in Computer Science Engineering from Sathyabama Institute of Science and Technology, Chennai, India. Her current research interests include machine learning, pattern recognition, computer vision, data analytics, and big data. She has published research papers in refereed journals and reputed international conferences.
+Email: radhikavikaskulkarni@gmail.com
+
+Shreyash Chilip is currently pursuing a Bachelor of Technology degree in Computer Engineering from Savitribai Phule Pune University, India. His main domains of interest are data science and analytics, software development, and machine learning. 
+Email:  shreyash.chilip24@vit.edu
+
+Vaibhavi Dubal is currently pursuing a Bachelor of Technology degree in Computer Engineering from Savitribai Phule Pune University, India. Her main domains of interest are data science and analytics, software development, and machine learning. 
+Email:  vaibhavi.dubal24@vit.edu
+
+Manali Patil is currently pursuing a Bachelor of Technology degree in Computer Engineering from Savitribai Phule Pune University, India. Her main domains of interest are data science and analytics, software development, and machine learning. 
+Email:  mahesh.manali24@vit.edu 
+
+  Aarti Agarkar is presently working as an Associate Professor in the Department of Computer Engineering, Vishwakarma Institute of Technology, Pune, India. She received a Ph.D. degree in Computer Science Engineering from K. L. University, Vijayawada, India. Her current research interests include machine learning, pattern recognition, computer vision, high-performance computing, data analytics, and big data. She has published research papers in refereed journals and reputed international conferences.
+Email: aarti.agarkar@vit.edu
+
+Mandar Karyakarte is presently working as a Registrar in the Indian Institute of Information Technology, Allahabad, India, and Professor in the Department of Computer Engineering, Vishwakarma Institute of Technology, Pune, India. His current research interests include Digital Signal Processing, machine learning, pattern recognition, computer vision, data analytics, and big data. He has published research papers in refereed journals and at reputed international conferences.
+Email: karyakarte.ms@gmail.com
+
+Appendix I
+| S. No. | Abbrevation | Description |
+| 1 | IID | Independent and Identically Distributed |
+| 2 | FL | Federated Learning |
+| 3 | Wi-Fi | Wireless Fidelity |
+| 4 | FedAvg | Federated Averaging |
+| 5 | FedProx | Federated Proximal |
+| 6 | CPU | Central Processing Unit |
+| 7 | ML | Machine Learning |
+| 8 | CNN | Convolutional Neural Network |
+| 9 | DL | Deep Learning |
+| 10 | IoT | Internet of Things |
+| 11 | EnLNet | Enhanced LinkNet |
+| 12 | MFCC | Mel-Frequency Cepstral Coefficients |
+| 13 | IAAM | Image Analysis and Attribute Modeling |
+| 14 | BERT | Bidirectional Encoder Representations from Transformers |
+| 15 | DO | Data Obfuscation |
+| 16 | DP | Differential Privacy |
+| 17 | AI | Artificial Intelligence |
+| 18 | NLP | Natural Language Processing |
+| 19 | F-AL | Federated Active Learning |
+| 20 | TF-IDF | Term frequency–inverse document frequency |
+| 21 | ROI | Return on Investment |
+| 22 | FMTL | Federated Multi-Task Learning |
+| 23 | FTL | Federated Transfer Learning |
+
+[2.7]

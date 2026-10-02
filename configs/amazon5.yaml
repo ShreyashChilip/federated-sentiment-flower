@@ -1,0 +1,3 @@
+# Amazon 5-class (1-5 stars). NOT USABLE YET: the data source is an open decision, see EXPERIMENT_PLAN.md section 6, item 1. Amazon Polarity must not be substituted.
+# Loading this file fails on purpose so that it cannot be used by accident.
+not_implemented: true

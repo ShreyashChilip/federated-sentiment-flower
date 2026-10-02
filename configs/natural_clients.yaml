@@ -1,0 +1,3 @@
+# Natural-client partition from real metadata. NOT USABLE YET: client definition (user vs product) is an open decision, see EXPERIMENT_PLAN.md section 6, item 2.
+# Loading this file fails on purpose so that it cannot be used by accident.
+not_implemented: true

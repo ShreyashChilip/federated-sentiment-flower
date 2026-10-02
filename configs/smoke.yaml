@@ -1,0 +1,40 @@
+# Tiny end-to-end check for the laptop. Results from this config are never
+# reported; it only verifies that the pipeline runs and is reproducible.
+inherits: base.yaml
+
+experiment:
+  name: _smoke
+  seeds: [42]
+
+device: cpu
+
+data:
+  max_train: 6000
+  max_test: 2000
+
+features:
+  max_features: 5000
+  min_df: 2
+
+partition:
+  num_clients: 3
+  dir: partitions/_smoke   # toy partitions are kept out of the tracked folder
+  alpha: 0.5
+
+fl:
+  rounds: 2
+  local_epochs: 1
+  lr: 0.5
+
+centralized:
+  epochs: 2
+
+local_only:
+  epochs: 2
+
+resources:
+  cpu_watts: 45   # nominal TDP of the development laptop CPU (Ryzen 5 5600H)
+  gpu_watts: 0
+
+simulation:
+  ray_cpus: 2

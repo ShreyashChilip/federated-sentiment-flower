@@ -1,0 +1,59 @@
+Planned Improvements
+Paper: Resource-Efficient Sentiment Classification through Federated Learning: Performance Analysis of FedProx and FedAvgPlan: Reimplement the full pipeline in Flower (flwr), rerun all experiments under one reproducible protocol, address all prior reviewer comments, and submit to a new journal.
+1. Implementation and reproducibility
+| Current shortcoming | Planned improvement |
+| Custom FedAvg/FedProx code with no standard framework (Rev. 1.10) | Rebuild in Flower using its built-in strategies and simulation engine |
+| Results, tables, and text don't agree (e.g., 93% in Tables 2–4 vs 83% in seed-averaged results) | Generate every table and figure from one logged pipeline, so all numbers come from a single source |
+| Inconsistent settings in the text (γ = 0.98 vs 0.95, overlapping round ranges) | Keep all settings in config files (Hydra) and pin library versions |
+| No shared code or partition script (Rev. 1.4) | Release the code on GitHub and save the partition indices for each seed |
+
+2. Data and partitioning
+| Current shortcoming | Planned improvement |
+| Table 1 sums to 560k, but the text says 418,600 training samples (Rev. 1.4) | Use Yelp's official train/test split, partition only the training set, and keep one held-out global test set |
+| Table 5 class skew doesn't match α = 0.1 | Use Flower's DirichletPartitioner so reported skew matches the actual α |
+| Only one easy, binary dataset (Rev. 1.13, deferred) | Keep Yelp Polarity as the main dataset, and add a harder multi-class set (Yelp Full or Amazon) plus Sentiment140 (natural user-based clients) or a non-English set |
+
+3. Models and algorithms
+| Current shortcoming | Planned improvement |
+| Only TF-IDF + Logistic Regression, where FedProx gains are small (convex model) | Compare models side by side: TF-IDF + LR, a small CNN/LSTM, and DistilBERT with LoRA (Rev. 1.7, previously deferred) |
+| Only FedAvg vs FedProx | Add standard baselines: SCAFFOLD, FedAdam, and/or FedNova |
+| Local-only baseline described but no numbers reported | Report the centralized (upper bound) and local-only (lower bound) baselines for every setting |
+| Unequal tuning (μ tuned for FedProx only) | Give every algorithm the same tuning budget, using validation data only |
+
+4. Experimental design
+| Current shortcoming | Planned improvement |
+| Sensitivity analysis confused α (heterogeneity) with C (client fraction) (Rev. 1.11) | Run separate ablations for μ, C, local epochs E, decay γ, and number of clients |
+| Only data heterogeneity simulated | Also simulate system heterogeneity: stragglers doing partial local work, plus dropouts, which is FedProx's original purpose |
+| Robustness tests reported only briefly (Rev. 1.12) | Report per-client results: worst-client accuracy and spread across clients (fairness) |
+
+5. Metrics and statistics
+| Current shortcoming | Planned improvement |
+| Recall not reported | Report accuracy, precision, recall, and F1 |
+| 3 seeds, no confidence intervals, no significance test (Rev. 1.8) | Use 5 seeds if compute allows, report mean ± std and 95% CIs, and run Wilcoxon or paired tests |
+| "FedProx > FedAvg" claimed, but at α = 0.1 the gap is within noise | Make claims only where they are statistically supported |
+| Convergence and error-band plots declined (Rev. 1.15) | Add per-round curves with error bands, convergence-to-target-F1, and data-efficiency plots |
+
+6. Communication and resource efficiency
+| Current shortcoming | Planned improvement |
+| Communication figures inconsistent (38.15 MB "per experiment" vs "per uplink"; 3.8 GB fits only one client) | Measure actual uplink/downlink bytes × participating clients per round, plus total bytes to reach a target F1 |
+| CPU comparison comes from a sequential single-machine simulation | Measure resource usage per client, showing that no single device carries the full load |
+| Text claims lower power for FL, but its own numbers show more energy (83 vs 70 kJ) and slower rounds | Report energy and time honestly, and reframe the efficiency argument around per-device load and scalability |
+
+7. Privacy
+| Current shortcoming | Planned improvement |
+| No differential privacy or secure aggregation; only a limitation statement (Rev. 1.14) | Add Flower's differential privacy wrappers and report the privacy vs accuracy trade-off (ε vs F1). Optionally, add secure aggregation. |
+
+8. Writing and presentation
+| Current shortcoming | Planned improvement |
+| "Wi-Fi enabled devices" in the abstract, not studied | Align the abstract and contributions with what is actually tested |
+| Figure 10 caption contradicts the text; garbled sentences | Do a full consistency pass on figures, captions, and text |
+| Reference errors (ref [7] DOI mismatch, refs [21]/[22] descriptions swapped) and reviewer tags like [1.2] still in the text | Verify every reference, and remove all revision markers |
+| Previous responses deferred several comments | Prepare a point-by-point checklist so every past reviewer comment is actually addressed |
+
+Proposed scope
+Core (must-do): Flower rebuild; corrected data splits; Yelp plus one harder dataset; three models; FedAvg, FedProx, and one more algorithm; α ∈ {0.1, 0.5, 1.0, 10}; seeds with statistical tests; honest communication and resource metrics.
+Extensions (if time and compute allow): third dataset (Sentiment140 or non-English); differential privacy trade-off; full ablation grid; secure aggregation.
+Next steps to agree on with sir:
+Choose the target journal, since its scope and length limits decide how many experiments to run.
+Finalize which items are core and which are extensions.
+Set timelines for implementation, experiments, and writing.

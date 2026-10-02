@@ -1,0 +1,17 @@
+# Installed on top of the Kaggle image. torch is NOT listed: the CUDA build shipped
+# with the image is used and its version is recorded per run in run_metadata.json.
+datasets==5.0.1
+flwr==1.39.0
+grpcio==1.84.0
+huggingface_hub==1.33.0
+matplotlib==3.11.2
+numpy==2.4.6
+pandas==3.0.6
+protobuf==6.33.6
+psutil==7.2.2
+pyarrow==25.0.1
+pytest==9.1.1
+PyYAML==6.0.3
+ray==2.55.1
+scikit-learn==1.9.1
+scipy==1.17.1

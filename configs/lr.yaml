@@ -1,0 +1,6 @@
+# TF-IDF + logistic regression (model family A).
+model:
+  name: lr
+
+features:
+  type: tfidf

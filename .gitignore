@@ -1,0 +1,16 @@
+__pycache__/
+*.pyc
+.pytest_cache/
+.venv/
+.ipynb_checkpoints/
+
+# Large / regenerable artifacts. Partition files and result summaries ARE tracked.
+data_cache/
+checkpoints/*
+!checkpoints/.gitkeep
+logs/*
+!logs/.gitkeep
+results/_smoke*/
+*.npz
+!partitions/**/*.npz
+partitions/_smoke/
