@@ -4,6 +4,7 @@ Runs are produced from the SYNTHETIC review file; no number here is a result.
 """
 import csv
 import json
+import os
 
 import pytest
 
@@ -21,6 +22,14 @@ from tests.test_natural_clients import make_cfg
 def review_file(tmp_path_factory):
     path = tmp_path_factory.mktemp("amazon") / "Synthetic.jsonl"
     return path, write_reviews(path)
+
+
+@pytest.fixture(scope="module", autouse=True)
+def synthetic_environment():
+    marker = os.environ.pop("KAGGLE_KERNEL_RUN_TYPE", None)
+    yield
+    if marker is not None:
+        os.environ["KAGGLE_KERNEL_RUN_TYPE"] = marker
 
 
 @pytest.fixture(scope="module")
