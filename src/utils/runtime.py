@@ -82,7 +82,8 @@ def prepare_run(cfg: dict, seed: int, run_dir, create_partition: bool = False) -
     """Materialize bundle, partition and labels; write run metadata."""
     run_dir = Path(run_dir)
     claim_run_dir(run_dir)
-    bundle = load_bundle(build_bundle(cfg))
+    include_test = bool(cfg.get("eval", {}).get("test", True))
+    bundle = load_bundle(build_bundle(cfg), include_test=include_test)
     part_cfg = {k: v for k, v in cfg["partition"].items() if k != "dir"}
     groups = None
     if part_cfg["scheme"] == "natural":

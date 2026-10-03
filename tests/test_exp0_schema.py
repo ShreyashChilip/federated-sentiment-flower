@@ -96,6 +96,22 @@ def test_unfinished_run_is_set_aside_not_overwritten(finished_run):
     assert json.loads((run_dir / "run_metadata.json").read_text())["run_id"] != first_id
 
 
+def test_prepare_run_skips_test_bundle_when_eval_disabled(finished_run, tmp_path, monkeypatch):
+    from src.utils import runtime
+
+    _, cell_cfg, _, _ = finished_run
+    cfg = deep_merge(cell_cfg, {"eval": {"test": False}})
+    observed = {}
+    original = runtime.load_bundle
+
+    def load_without_test(path, include_test=True):
+        observed["include_test"] = include_test
+        return original(path, include_test=include_test)
+
+    monkeypatch.setattr(runtime, "load_bundle", load_without_test)
+    prepare_run(cfg, 7, tmp_path / "tuning" / "seed7", create_partition=True)
+    assert observed["include_test"] is False
+
 def test_consistency_checks_pass_for_comparable_conditions_and_catch_differences(finished_run, tmp_path):
     cfg, cell_cfg, central_dir, _ = finished_run
     dirs = {"centralized": central_dir}
