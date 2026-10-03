@@ -139,12 +139,15 @@ def prepare_run(cfg: dict, seed: int, run_dir, create_partition: bool = False) -
 _CACHE: dict[str, Runtime] = {}
 
 
-def load_runtime(run_dir, include_test: bool = True) -> Runtime:
+def load_runtime(run_dir, include_test: bool | None = None) -> Runtime:
+    run_dir = Path(run_dir)
+    with open(run_dir / "run_metadata.json", "r", encoding="utf-8") as f:
+        metadata = json.load(f)
+    if include_test is None:
+        include_test = bool(metadata["config"].get("eval", {}).get("test", True))
     key = f"{run_dir}|test={include_test}"
     if key not in _CACHE:
-        run_dir = Path(run_dir)
-        with open(run_dir / "run_metadata.json", "r", encoding="utf-8") as f:
-            meta = json.load(f)
+        meta = metadata
         clients, _ = load_partition(Path(meta["partition"]["dir"]), meta["partition"]["name"])
         _CACHE[key] = Runtime(
             run_dir=run_dir,

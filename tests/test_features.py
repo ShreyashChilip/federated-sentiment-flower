@@ -1,5 +1,8 @@
 import numpy as np
+import json
+import scipy.sparse as sp
 
+from src.data.prepare import _write_csr_stream, load_bundle
 from src.preprocessing.tfidf import FederatedTfidf
 
 DOCS = [
@@ -42,3 +45,15 @@ def test_held_out_documents_do_not_change_the_feature_space():
     b = FederatedTfidf(CFG).fit(train)
     assert a.vocabulary_ == b.vocabulary_ and np.array_equal(a.idf_, b.idf_)
     assert all(df >= CFG["min_df"] for df in a.df_)
+
+
+def test_streamed_csr_bundle_loads_without_npy_components(tmp_path):
+    expected = sp.csr_matrix(np.array([[0, 2, 0], [3, 0, 4]], dtype=np.float32))
+    _write_csr_stream(tmp_path, "x_train", iter([expected[:1], expected[1:]]), expected.shape)
+    np.save(tmp_path / "y_train.npy", np.array([0, 1]))
+    np.save(tmp_path / "roles.npy", np.array([0, 0]))
+    (tmp_path / "meta.json").write_text(json.dumps({"kind": "standard", "num_classes": 2}))
+
+    bundle = load_bundle(tmp_path, include_test=False)
+
+    assert (bundle.x_train != expected).nnz == 0

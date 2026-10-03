@@ -3,6 +3,17 @@
 Protocol and code changes that can affect results. Each entry states whether
 results had been seen when the change was made.
 
+## 2026-10-03 (Experiment 0B memory handling; no official result existed)
+
+* Natural-client preprocessing now releases the raw review rows and duplicate
+  tracking set after constructing the cleaned table, drops unused columns
+  before feature construction, fits TF-IDF from client-wise sufficient
+  statistics, and streams transformed CSR chunks to disk. Runtime loading
+  recognizes this streamed CSR format. This preserves the frozen cleaning,
+  client filtering, train-role fitting and feature-selection rules; no
+  experimental result had been seen. Regression coverage added for loading
+  streamed bundles.
+
 ## 2026-10-02
 
 * Project created. Old code and numbers discarded (`docs/EXISTING_MATERIALS_AUDIT.md`).

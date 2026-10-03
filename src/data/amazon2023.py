@@ -80,6 +80,7 @@ def read_reviews(path: Path, max_records: int | None = None) -> tuple[pd.DataFra
             title = (r.get("title") or "").strip()
             rows.append((user, item, int(rating) - 1, f"{title}\n{body}" if title else body, r.get("timestamp")))
     table = pd.DataFrame(rows, columns=["user_id", "parent_asin", "label", "text", "timestamp"])
+    del rows, seen
     counts["kept"] = len(table)
     return table, counts
 

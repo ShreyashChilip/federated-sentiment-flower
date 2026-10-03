@@ -86,11 +86,45 @@ def _save_csr_components(out: Path, name: str, matrix: sp.csr_matrix) -> None:
 
 
 def _load_csr_components(path: Path, name: str) -> sp.csr_matrix:
+    raw_meta = path / f"{name}.raw.json"
+    if raw_meta.exists():
+        meta = json.loads(raw_meta.read_text(encoding="utf-8"))
+        data = np.memmap(path / f"{name}.data.bin", mode="r", dtype=np.dtype(meta["data_dtype"]), shape=meta["data_shape"])
+        indices = np.memmap(path / f"{name}.indices.bin", mode="r", dtype=np.dtype(meta["indices_dtype"]), shape=meta["indices_shape"])
+        indptr = np.memmap(path / f"{name}.indptr.bin", mode="r", dtype=np.dtype(meta["indptr_dtype"]), shape=meta["indptr_shape"])
+        return sp.csr_matrix((data, indices, indptr), shape=tuple(meta["shape"]), copy=False)
     data = np.load(path / f"{name}.data.npy", mmap_mode="r")
     indices = np.load(path / f"{name}.indices.npy", mmap_mode="r")
     indptr = np.load(path / f"{name}.indptr.npy", mmap_mode="r")
     shape = tuple(json.loads((path / f"{name}.shape.json").read_text(encoding="utf-8")))
     return sp.csr_matrix((data, indices, indptr), shape=shape, copy=False)
+
+
+def _write_csr_stream(out: Path, name: str, matrices, shape: tuple[int, int]) -> None:
+    """Write CSR chunks without retaining the full sparse matrix in RAM."""
+    data_path, indices_path, indptr_path = (out / f"{name}.{suffix}.bin" for suffix in ("data", "indices", "indptr"))
+    nnz, rows = 0, 0
+    data_dtype = indices_dtype = None
+    with open(data_path, "wb") as data_file, open(indices_path, "wb") as indices_file, open(indptr_path, "wb") as indptr_file:
+        np.asarray([0], dtype=np.int64).tofile(indptr_file)
+        for matrix in matrices:
+            matrix = matrix.tocsr()
+            data_dtype = matrix.data.dtype
+            indices_dtype = matrix.indices.dtype
+            matrix.data.tofile(data_file)
+            matrix.indices.tofile(indices_file)
+            (matrix.indptr[1:].astype(np.int64, copy=False) + nnz).tofile(indptr_file)
+            nnz += matrix.nnz
+            rows += matrix.shape[0]
+    (out / f"{name}.raw.json").write_text(json.dumps({
+        "shape": [rows, shape[1]],
+        "data_dtype": str(np.dtype(data_dtype)),
+        "indices_dtype": str(np.dtype(indices_dtype)),
+        "indptr_dtype": "int64",
+        "data_shape": [nnz],
+        "indices_shape": [nnz],
+        "indptr_shape": [rows + 1],
+    }), encoding="utf-8")
 
 
 def _build_standard(cfg: dict, out: Path) -> dict:
@@ -124,7 +158,8 @@ def _build_natural(cfg: dict, out: Path) -> dict:
     table, source = amazon2023.load_reviews(data, cache_root(cfg))
     raw_codes, _ = natural.encode_clients(table[definition].to_numpy())
     keep, filter_report = natural.filter_clients(raw_codes, data["client_filter"])
-    table = table.loc[keep].reset_index(drop=True)
+    table = table.loc[keep, [definition, "label", "text"]].reset_index(drop=True)
+    del raw_codes, keep
     codes, keys = natural.encode_clients(table[definition].to_numpy())
     labels = table["label"].to_numpy().astype(np.int64)
 
@@ -136,17 +171,35 @@ def _build_natural(cfg: dict, out: Path) -> dict:
     overlap = natural.assert_no_client_overlap(codes, roles)
 
     texts = table["text"].tolist()
-    vec = FederatedTfidf(cfg["features"]).fit([texts[i] for i in np.flatnonzero(roles == TRAIN)])
-    _save_csr_components(out, "x_train", vec.transform(texts))
+    del table
+
+    def train_texts_by_client():
+        for client_id in range(len(keys)):
+            rows = np.flatnonzero((codes == client_id) & (roles == TRAIN))
+            yield [texts[i] for i in rows]
+
+    vec = FederatedTfidf(cfg["features"]).fit_federated(train_texts_by_client())
+
+    def transformed_chunks():
+        chunk_size = 50_000
+        for start in range(0, len(texts), chunk_size):
+            yield vec.transform(texts[start:start + chunk_size])
+
+    _write_csr_stream(out, "x_train", transformed_chunks(), (len(texts), len(vec.vocabulary_)))
     np.save(out / "y_train.npy", labels)
     np.save(out / "roles.npy", roles)
     np.save(out / "client_codes.npy", codes)
     with open(out / "client_keys.json", "w", encoding="utf-8") as f:
         json.dump([str(k) for k in keys], f)
+    _save_features(out, vec)
+    num_features = len(vec.vocabulary_)
+    fit_documents = int(vec.n_docs_)
+    vocabulary_hash = hashlib.sha256((out / "vocabulary.json").read_bytes()).hexdigest()
+    del texts, vec
     return {
         "kind": "natural", "dataset": data["dataset"], "num_classes": amazon2023.NUM_CLASSES,
-        "num_features": len(vec.vocabulary_), "fit_documents": int(vec.n_docs_),
-        "vocabulary_sha256": _save_features(out, vec),
+        "num_features": num_features, "fit_documents": fit_documents,
+        "vocabulary_sha256": vocabulary_hash,
         "client_definition": definition, "client_filter": filter_report,
         "holdout": {"unseen_fraction": float(hold["unseen_fraction"]), "holdout_seed": holdout_seed, **overlap},
         "role_seed": role_seed, "role_counts": np.bincount(roles, minlength=4).tolist(),
@@ -184,7 +237,7 @@ def load_bundle(path, include_test: bool = True) -> Bundle:
     if key not in _CACHE:
         with open(path / "meta.json", "r", encoding="utf-8") as f:
             meta = json.load(f)
-        if (path / "x_train.data.npy").exists():
+        if (path / "x_train.data.npy").exists() or (path / "x_train.raw.json").exists():
             x_train = _load_csr_components(path, "x_train")
         else:
             x_train = sp.load_npz(path / "x_train.npz").tocsr()
