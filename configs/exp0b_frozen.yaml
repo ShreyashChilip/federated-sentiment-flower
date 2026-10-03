@@ -1,0 +1,85 @@
+# Frozen Experiment 0B protocol for Amazon Reviews 2023 product clients.
+# Category/filter selection was made from pre-training client-density profiles;
+# no model performance was used.
+inherits: exp0b_product.yaml
+
+experiment:
+  name: exp0b_video_games_product
+  seeds: [42, 123, 456, 789, 1001, 2024, 31415, 271828]
+
+data:
+  dataset: amazon2023
+  category: Video_Games
+  revision: 2b6d039ed471f2ba5fd2acb718bf33b0a7e5598e
+  client_definition: parent_asin
+  max_records: null
+  client_filter:
+    min_reviews: 20
+    max_reviews: null
+    max_clients: null
+    filter_seed: 0
+  holdout:
+    unseen_fraction: 0.2
+    holdout_seed: 0
+  role_fractions: [0.8, 0.1, 0.1]
+
+# These fixed data-quality rules are implemented by src/data/amazon2023.py.
+cleaning:
+  ratings: [1, 2, 3, 4, 5]
+  require_identifiers: [user_id, parent_asin]
+  require_nonempty_stripped_text: true
+  deduplicate_by: [user_id, parent_asin, text]
+  duplicate_policy: keep_first
+  input_text: title_then_body
+  label: rating_minus_one
+  num_classes: 5
+
+features:
+  type: tfidf
+  max_features: 50000
+  ngram_range: [1, 2]
+  min_df: 5
+  sublinear_tf: true
+
+partition:
+  scheme: natural
+  num_clients: null
+
+protocol:
+  frozen: true
+  required_seed_count: 8
+
+fl:
+  rounds: 50
+  fraction_fit: 0.1
+  local_epochs: 1
+  batch_size: 32
+  optimizer: sgd
+  lr: 0.1
+  weight_decay: 0.0
+  prior_reference: none
+
+centralized:
+  epochs: 10
+
+profile:
+  thresholds: [1, 2, 5, 10, 20, 50, 100, 200]
+
+diagnostic:
+  min_document_frequency: 50
+  min_client_frequency: 5
+  null_repeats: 20
+  fdr: 0.05
+
+decision_record:
+  selected_category: Video_Games
+  selected_client_definition: parent_asin
+  selected_min_reviews: 20
+  selection_basis: pre-training client-density profiling
+  source_profiles:
+  - Amazon_Fashion/user
+  - Amazon_Fashion/product
+  - Subscription_Boxes/user
+  - Video_Games/product
+  model_performance_used: false
+  training_run_used: false
