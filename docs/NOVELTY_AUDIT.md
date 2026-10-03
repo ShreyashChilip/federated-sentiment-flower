@@ -247,3 +247,22 @@ the project may later support a narrowly framed empirical benchmark/diagnostic
 contribution; that still requires a completed literature review (including the
 open items above), valid official results, and a comparison that separates the
 work from FedCIFL. No new method contribution is currently implemented.
+
+## 10. Existing manuscript contribution wording
+
+The only manuscript text currently in the repository is
+`docs/source_text/original_manuscript.txt`; `manuscript/` contains no draft.
+Its contribution paragraph describes a FedAvg/FedProx comparison for
+sentiment analysis, convergence, communication overhead and energy efficiency,
+and its abstract frames this as a privacy-preserving FL framework. Those are
+application and evaluation claims, not a new algorithm. The novelty audit's
+prior-art review does not support presenting FedAvg/FedProx, generic FL
+sentiment analysis, or generic non-IID benchmarking as novel.
+
+The current project also documents a single-machine Flower simulation rather
+than Wi-Fi-enabled physical devices, and its TF-IDF preprocessing note says
+client term statistics are exposed unless secure aggregation is used. FL
+alone therefore does not establish a privacy guarantee. The old manuscript's
+device/privacy/resource claims must be checked against actual implementation
+and results before reuse. The planned Experiment 0B contribution is not yet
+stated in a manuscript draft, and its novelty remains unverified.
