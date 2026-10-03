@@ -22,8 +22,11 @@ No validation, client-test or global-test document is used for fitting.
 """
 from __future__ import annotations
 
-from collections import Counter
 from collections.abc import Sequence
+from contextlib import closing
+import sqlite3
+import tempfile
+from pathlib import Path
 
 import numpy as np
 import scipy.sparse as sp
@@ -77,27 +80,53 @@ class FederatedTfidf:
         """Build the same feature space from per-client statistics only.
 
         Each client may be supplied as a sequence of documents or as an
-        iterator of document batches, so a single large client need not be
-        materialized in memory.
+        iterator of document batches. Corpus-wide term statistics are
+        aggregated on disk so large vocabularies do not grow unbounded Python
+        counters.
         """
-        tf, df, n = Counter(), Counter(), 0
-        for texts in client_texts:
-            if isinstance(texts, Sequence):
-                batches = (texts[start:start + 5000] for start in range(0, len(texts), 5000))
-            else:
-                batches = iter(texts)
-            for batch in batches:
-                if not batch:
-                    continue
-                c_terms, c_tf, c_df, c_n = term_statistics(batch, self.cfg)
-                tf.update(dict(zip(c_terms.tolist(), c_tf.tolist())))
-                df.update(dict(zip(c_terms.tolist(), c_df.tolist())))
-                n += c_n
-        terms = np.array(sorted(tf), dtype=object)
-        return self._finalize(
-            terms, np.array([tf[t] for t in terms], dtype=np.int64), np.array([df[t] for t in terms], dtype=np.int64), n
-        )
+        n = 0
+        with tempfile.TemporaryDirectory(prefix="fed-tfidf-") as temp_dir:
+            db_path = Path(temp_dir) / "term_statistics.sqlite"
+            with closing(sqlite3.connect(db_path)) as connection:
+                connection.execute("PRAGMA journal_mode=OFF")
+                connection.execute("PRAGMA synchronous=OFF")
+                connection.execute("PRAGMA temp_store=FILE")
+                connection.execute("PRAGMA cache_size=-65536")
+                connection.execute(
+                    "CREATE TABLE term_stats (term TEXT PRIMARY KEY, tf INTEGER NOT NULL, df INTEGER NOT NULL)"
+                )
+                upsert = """
+                    INSERT INTO term_stats(term, tf, df) VALUES(?, ?, ?)
+                    ON CONFLICT(term) DO UPDATE SET
+                        tf = tf + excluded.tf,
+                        df = df + excluded.df
+                """
+                for texts in client_texts:
+                    if isinstance(texts, Sequence):
+                        batches = (texts[start:start + 5000] for start in range(0, len(texts), 5000))
+                    else:
+                        batches = iter(texts)
+                    for batch in batches:
+                        if not batch:
+                            continue
+                        c_terms, c_tf, c_df, c_n = term_statistics(batch, self.cfg)
+                        connection.executemany(
+                            upsert,
+                            ((str(term), int(term_tf), int(term_df)) for term, term_tf, term_df in zip(c_terms, c_tf, c_df)),
+                        )
+                        n += c_n
+                top = connection.execute(
+                    "SELECT term, tf, df FROM term_stats WHERE df >= ? "
+                    "ORDER BY tf DESC, term ASC LIMIT ?",
+                    (int(self.cfg.get("min_df", 1)), int(self.cfg["max_features"])),
+                ).fetchall()
 
+        top.sort(key=lambda item: item[0])
+        self.vocabulary_ = {term: index for index, (term, _, _) in enumerate(top)}
+        self.df_ = np.fromiter((df for _, _, df in top), dtype=np.int64, count=len(top))
+        self.idf_ = (np.log((1 + n) / (1 + self.df_)) + 1.0).astype(np.float32)
+        self.n_docs_ = n
+        return self
     def transform(self, texts) -> sp.csr_matrix:
         counts = _counter(self.cfg, self.vocabulary_).transform(texts).astype(np.float32)
         if self.cfg.get("sublinear_tf", True):
