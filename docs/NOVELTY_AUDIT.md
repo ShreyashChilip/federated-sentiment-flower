@@ -222,3 +222,28 @@ diagnostic and its negative result.
 - Participation gap: https://arxiv.org/abs/2110.14216
 - KTEPS: https://arxiv.org/abs/2107.11956
 - UserIdentifier: https://arxiv.org/abs/2110.00135
+
+## 9. Targeted update (2026-10-03)
+
+A targeted search for federated lexical confounding, user-level federated
+sentiment, and recent Amazon-review work found no basis to upgrade the status
+above. FedCIFL remains a direct prior-art overlap for the core problem
+(client-unstable features, Amazon-review sentiment and unseen-client/OOD
+evaluation), even though its clients and feature-selection mechanism differ.
+The official AAAI record describes its sample reweighting and iterative
+feature-level causal-effect estimation: <https://ojs.aaai.org/index.php/AAAI/article/view/33866>.
+
+The search also surfaced Pandya and Thakkar's 2026 PANS paper, which applies
+polarity-conditioned noise scaling to privacy-preserving federated sentiment
+analysis on IMDB and MovieLens. This is adjacent FL-sentiment prior art, but
+its stated question is privacy/noise allocation rather than natural-client
+lexical confounding: <https://doi.org/10.1016/j.knosys.2026.115348>. This
+finding is based on the publisher abstract, not a full-text review.
+
+**Current conclusion: novelty is not proven.** Experiment 0B can test whether
+the pre-specified phenomenon appears in the selected data and can estimate
+generalization to held-out clients. It cannot establish originality. At most,
+the project may later support a narrowly framed empirical benchmark/diagnostic
+contribution; that still requires a completed literature review (including the
+open items above), valid official results, and a comparison that separates the
+work from FedCIFL. No new method contribution is currently implemented.
