@@ -21,7 +21,9 @@ app = ClientApp()
 
 
 def _setup(msg: Message, context: Context):
-    rt = load_runtime(msg.content["config"]["run_dir"])
+    # Client workers never evaluate the global/unseen holdout, so avoid loading
+    # that sparse matrix into every Ray process during tuning and training.
+    rt = load_runtime(msg.content["config"]["run_dir"], include_test=False)
     client_id = int(context.node_config["partition-id"])
     torch.set_num_threads(int(rt.cfg.get("client_threads", 1)))
     return rt, client_id

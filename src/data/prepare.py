@@ -77,6 +77,22 @@ def _save_features(out: Path, vec: FederatedTfidf) -> str:
     return hashlib.sha256(blob).hexdigest()
 
 
+def _save_csr_components(out: Path, name: str, matrix: sp.csr_matrix) -> None:
+    """Save CSR arrays separately so worker processes can memory-map them."""
+    np.save(out / f"{name}.data.npy", matrix.data, allow_pickle=False)
+    np.save(out / f"{name}.indices.npy", matrix.indices, allow_pickle=False)
+    np.save(out / f"{name}.indptr.npy", matrix.indptr, allow_pickle=False)
+    (out / f"{name}.shape.json").write_text(json.dumps(matrix.shape), encoding="utf-8")
+
+
+def _load_csr_components(path: Path, name: str) -> sp.csr_matrix:
+    data = np.load(path / f"{name}.data.npy", mmap_mode="r")
+    indices = np.load(path / f"{name}.indices.npy", mmap_mode="r")
+    indptr = np.load(path / f"{name}.indptr.npy", mmap_mode="r")
+    shape = tuple(json.loads((path / f"{name}.shape.json").read_text(encoding="utf-8")))
+    return sp.csr_matrix((data, indices, indptr), shape=shape, copy=False)
+
+
 def _build_standard(cfg: dict, out: Path) -> dict:
     from src.data.datasets import load_text_dataset
 
@@ -85,7 +101,7 @@ def _build_standard(cfg: dict, out: Path) -> dict:
     roles = assign_roles(ds.train_labels, cfg["data"]["role_fractions"], role_seed)
     # Vocabulary and IDF come from TRAIN-role documents only.
     vec = FederatedTfidf(cfg["features"]).fit([ds.train_texts[i] for i in np.flatnonzero(roles == TRAIN)])
-    sp.save_npz(out / "x_train.npz", vec.transform(ds.train_texts))
+    _save_csr_components(out, "x_train", vec.transform(ds.train_texts))
     sp.save_npz(out / "x_test.npz", vec.transform(ds.test_texts))
     np.save(out / "y_train.npy", ds.train_labels)
     np.save(out / "y_test.npy", ds.test_labels)
@@ -121,7 +137,7 @@ def _build_natural(cfg: dict, out: Path) -> dict:
 
     texts = table["text"].tolist()
     vec = FederatedTfidf(cfg["features"]).fit([texts[i] for i in np.flatnonzero(roles == TRAIN)])
-    sp.save_npz(out / "x_train.npz", vec.transform(texts))
+    _save_csr_components(out, "x_train", vec.transform(texts))
     np.save(out / "y_train.npy", labels)
     np.save(out / "roles.npy", roles)
     np.save(out / "client_codes.npy", codes)
@@ -161,16 +177,26 @@ def build_bundle(cfg: dict) -> Path:
 _CACHE: dict[str, Bundle] = {}
 
 
-def load_bundle(path) -> Bundle:
+def load_bundle(path, include_test: bool = True) -> Bundle:
     """Load a bundle; cached per process so simulated clients share one copy."""
     path = Path(path)
-    key = str(path)
+    key = f"{path}|test={include_test}"
     if key not in _CACHE:
         with open(path / "meta.json", "r", encoding="utf-8") as f:
             meta = json.load(f)
-        x_train = sp.load_npz(path / "x_train.npz").tocsr()
+        if (path / "x_train.data.npy").exists():
+            x_train = _load_csr_components(path, "x_train")
+        else:
+            x_train = sp.load_npz(path / "x_train.npz").tocsr()
         y_train, roles = np.load(path / "y_train.npy"), np.load(path / "roles.npy")
-        if meta.get("kind", "standard") == "natural":
+        if not include_test:
+            x_test = sp.csr_matrix((0, x_train.shape[1]), dtype=x_train.dtype)
+            y_test = np.empty(0, dtype=y_train.dtype)
+            extra = dict(x_test=x_test, y_test=y_test)
+            if meta.get("kind", "standard") == "natural":
+                extra.update(client_codes=np.load(path / "client_codes.npy", mmap_mode="r"),
+                             test_client_codes=np.empty(0, dtype=np.int64))
+        elif meta.get("kind", "standard") == "natural":
             from src.data.natural import UNSEEN
 
             codes = np.load(path / "client_codes.npy")

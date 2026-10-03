@@ -23,12 +23,15 @@ import csv
 import hashlib
 import itertools
 import json
+import subprocess
+import sys
+import tempfile
 from pathlib import Path
 
 import yaml
 
 from src.analysis import exp0
-from src.runner import is_complete, run_federated
+from src.runner import is_complete
 from src.utils.config import PROJECT_ROOT, deep_merge
 from src.utils.env import collect_environment
 
@@ -63,7 +66,29 @@ def run_grid(cfg: dict, create_partitions: bool = True) -> None:
             print(f"skip  lr={lr:g} wd={wd:g} (finished)", flush=True)
             continue
         print(f"tune  lr={lr:g} wd={wd:g}", flush=True)
-        run_federated(tuning_config(cfg, lr, wd), seed, run_dir, create_partitions)
+        run_one_point(tuning_config(cfg, lr, wd), seed, run_dir, create_partitions)
+
+
+def run_one_point(cfg: dict, seed: int, run_dir: Path, create_partitions: bool) -> None:
+    """Run one grid point in a fresh process so Ray and bundle state cannot accumulate."""
+    config_file = None
+    try:
+        with tempfile.NamedTemporaryFile("w", suffix=".json", delete=False, encoding="utf-8") as f:
+            json.dump(cfg, f)
+            config_file = Path(f.name)
+        command = [
+            sys.executable,
+            str(PROJECT_ROOT / "experiments" / "run_tuning_point.py"),
+            "--config-json", str(config_file),
+            "--seed", str(seed),
+            "--run-dir", str(run_dir),
+        ]
+        if create_partitions:
+            command.append("--create-partition")
+        subprocess.run(command, cwd=PROJECT_ROOT, check=True)
+    finally:
+        if config_file is not None:
+            config_file.unlink(missing_ok=True)
 
 
 def select(cfg: dict) -> dict:

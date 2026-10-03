@@ -139,8 +139,8 @@ def prepare_run(cfg: dict, seed: int, run_dir, create_partition: bool = False) -
 _CACHE: dict[str, Runtime] = {}
 
 
-def load_runtime(run_dir) -> Runtime:
-    key = str(run_dir)
+def load_runtime(run_dir, include_test: bool = True) -> Runtime:
+    key = f"{run_dir}|test={include_test}"
     if key not in _CACHE:
         run_dir = Path(run_dir)
         with open(run_dir / "run_metadata.json", "r", encoding="utf-8") as f:
@@ -150,7 +150,7 @@ def load_runtime(run_dir) -> Runtime:
             run_dir=run_dir,
             cfg=meta["config"],
             seed=meta["seed"],
-            bundle=load_bundle(meta["bundle_dir"]),
+            bundle=load_bundle(meta["bundle_dir"], include_test=include_test),
             clients=clients,
             y_train=np.load(run_dir / "train_labels.npy"),
         )
