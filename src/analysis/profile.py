@@ -23,9 +23,9 @@ def profile_and_save(cfg: dict, out_root=None) -> tuple[Path, dict]:
     definition = data["client_definition"]
     if definition not in amazon2023.CLIENT_DEFINITIONS:
         raise ValueError(f"data.client_definition must be one of {amazon2023.CLIENT_DEFINITIONS}")
-    table, source = amazon2023.load_reviews(data, cache_root(cfg))
-    codes, keys = natural.encode_clients(table[definition].to_numpy())
-    report = natural.profile_clients(codes, table["label"].to_numpy(), amazon2023.NUM_CLASSES, cfg["profile"]["thresholds"])
+    store_path, source = amazon2023.open_review_store(data, cache_root(cfg))
+    keys, label_counts = amazon2023.client_counts(store_path, definition)
+    report = natural.profile_client_counts(label_counts, cfg["profile"]["thresholds"])
     per_client = report.pop("per_client_table")
 
     out_root = Path(out_root) if out_root else PROJECT_ROOT / cfg["experiment"]["results_dir"] / "exp0b_profile"

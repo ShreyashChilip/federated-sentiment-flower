@@ -53,15 +53,17 @@ tables, manuscript, and the candidate method (deliberately).
 
 | Item | State |
 |---|---|
-| Configs `exp0b_user.yaml` and `exp0b_product.yaml` (separate bundle, partition, results) | Written |
+| Configs `exp0b_user.yaml` and `exp0b_product.yaml` (separate bundle, partition, results) | Written; the product protocol also has a frozen `configs/exp0b_frozen.yaml` |
 | Profiling script `experiments/exp0b_profile_clients.py` (no training) | Written |
 | Training script `experiments/exp0b_natural_clients.py` | Written |
 | Held-out clients: whole clients, zero overlap asserted and recorded | Done |
 | Vocabulary fitted on training rows of seen clients only | Done and tested |
-| Amazon category | **Missing** (D6) |
-| Client-size rule (`min_reviews`, optional caps) | **Missing by design**: chosen from the profile, before training (D7) |
-| Seeds, hyperparameters, prior reference | **Missing** (D1, D3, D4) |
-| Data licence check | **Missing** (D8) |
+| Amazon category | Product: `Video_Games` frozen in `configs/exp0b_frozen.yaml`; user: unset |
+| Client-size rule (`min_reviews`, optional caps) | Product: min 20, no caps in frozen config; profile artifacts are not in the repository. User: unset |
+| Seeds, hyperparameters, prior reference | Product: 8 seeds, frozen config, provisional values fixed, prior reference `none`; user: not frozen |
+| Pre-training client profiles | Decision record names four source profiles, but the profile outputs are absent from the repository and still need verification |
+| Data licence check | **Open (D8):** the dataset maintainer says they cannot assign a license and places responsibility on users to follow applicable law; institutional/research-use review is still needed before distribution or publication decisions ([dataset discussion](https://huggingface.co/datasets/McAuley-Lab/Amazon-Reviews-2023/discussions/1)) |
+| Kaggle environment and official data run | Not recorded; no real 0B profiles or training results are present |
 
 ## 4. Implementation / protocol mismatches
 

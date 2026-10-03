@@ -7,7 +7,9 @@ import pytest
 from src.data import amazon2023, natural
 from src.data.prepare import build_bundle, load_bundle
 from src.data.roles import CLIENT_TEST, TRAIN, VAL
+from src.preprocessing.tfidf import FederatedTfidf
 from src.utils.config import load_config
+from src.utils.seeding import derive_seed
 from tests.synthetic_reviews import write_reviews
 
 
@@ -156,3 +158,36 @@ def test_training_refuses_to_start_without_a_filter_rule(review_file, tmp_path):
     cfg = make_cfg(review_file, tmp_path, **{"data.client_filter.min_reviews": None})
     with pytest.raises(ValueError, match="min_reviews is not set"):
         build_bundle(cfg)
+
+
+def test_disk_backed_bundle_matches_in_memory_protocol_with_caps(review_file, tmp_path):
+    cfg = make_cfg(review_file, tmp_path, "user", **{
+        "data.client_filter.max_reviews": 25,
+        "data.client_filter.max_clients": 30,
+        "data.client_filter.filter_seed": 13,
+    })
+    path, _ = review_file
+    table, _ = amazon2023.read_reviews(path)
+    raw_codes, _ = natural.encode_clients(table["user_id"].to_numpy())
+    keep, expected_filter = natural.filter_clients(raw_codes, cfg["data"]["client_filter"])
+    table = table.loc[keep].reset_index(drop=True)
+    codes, keys = natural.encode_clients(table["user_id"].to_numpy())
+    hold = cfg["data"]["holdout"]
+    holdout_seed = derive_seed("holdout", cfg["data"]["dataset"], hold.get("holdout_seed", 0))
+    seen, _ = natural.split_clients(np.arange(len(keys)), float(hold["unseen_fraction"]), holdout_seed)
+    role_seed = derive_seed("roles", cfg["data"]["dataset"], cfg["data"].get("role_seed", 0))
+    roles = natural.assign_roles_within_clients(codes, seen, cfg["data"]["role_fractions"], role_seed)
+    texts = table["text"].tolist()
+    pooled_reference = FederatedTfidf(cfg["features"]).fit_federated(
+        [ [texts[i] for i in np.flatnonzero((codes == client) & (roles == TRAIN))]
+          for client in range(len(keys)) ]
+    ).transform(texts)
+
+    bundle = load_bundle(build_bundle(cfg))
+
+    assert bundle.meta["client_filter"] == expected_filter
+    assert json.loads((bundle.path / "client_keys.json").read_text()) == keys.tolist()
+    assert np.array_equal(bundle.y_train, table["label"].to_numpy())
+    assert np.array_equal(bundle.client_codes, codes)
+    assert np.array_equal(bundle.roles, roles)
+    assert (bundle.x_train != pooled_reference).nnz == 0

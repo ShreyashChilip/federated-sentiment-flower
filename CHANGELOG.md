@@ -13,6 +13,13 @@ results had been seen when the change was made.
   client filtering, train-role fitting and feature-selection rules; no
   experimental result had been seen. Regression coverage added for loading
   streamed bundles.
+* Follow-up scale review found that parsing still materialized the entire
+  category in Python before the streamed feature path. The 0B profile and
+  bundle builders now ingest cleaned reviews and duplicate keys into a
+  disk-backed SQLite store, aggregate client profiles from counts, and read
+  client text in batches. A synthetic parity check confirms the existing
+  seeded client caps, holdout/role splits and TF-IDF features are preserved.
+  No official result existed.
 
 ## 2026-10-02
 

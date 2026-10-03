@@ -31,11 +31,21 @@ def encode_clients(keys) -> tuple[np.ndarray, np.ndarray]:
 def profile_clients(codes: np.ndarray, labels: np.ndarray, num_classes: int, thresholds=DEFAULT_THRESHOLDS) -> dict:
     """Describe the raw client population before any filtering or training."""
     codes, labels = np.asarray(codes), np.asarray(labels)
-    n = len(codes)
-    sizes = np.bincount(codes)
-    k = len(sizes)
     # K x C table of label counts per client
+    k = int(codes.max()) + 1 if len(codes) else 0
     table = np.bincount(codes * num_classes + labels, minlength=k * num_classes).reshape(k, num_classes)
+    return profile_client_counts(table, thresholds)
+
+
+def profile_client_counts(table: np.ndarray, thresholds=DEFAULT_THRESHOLDS) -> dict:
+    """Profile clients from an already aggregated client-by-class count table."""
+    table = np.asarray(table, dtype=np.int64)
+    if table.ndim != 2 or table.shape[1] == 0:
+        raise ValueError("client label counts must be a non-empty 2D table")
+    sizes = table.sum(axis=1)
+    if not len(sizes) or np.any(sizes == 0):
+        raise ValueError("every profiled client must have at least one record")
+    n, k, num_classes = int(sizes.sum()), len(sizes), table.shape[1]
     share = table / sizes[:, None]
     majority = share.max(axis=1)
     mean_label = (table * np.arange(num_classes)).sum(axis=1) / sizes
@@ -58,8 +68,8 @@ def profile_clients(codes: np.ndarray, labels: np.ndarray, num_classes: int, thr
         "num_records": int(n),
         "num_raw_clients": int(k),
         "client_size": {**dist(sizes), "median": float(np.median(sizes))},
-        "global_class_counts": np.bincount(labels, minlength=num_classes).tolist(),
-        "global_class_distribution": (np.bincount(labels, minlength=num_classes) / n).tolist(),
+        "global_class_counts": table.sum(axis=0).tolist(),
+        "global_class_distribution": (table.sum(axis=0) / n).tolist(),
         # how skewed individual clients are, over ALL raw clients
         "per_client_majority_class_share": dist(majority),
         "per_client_mean_label": dist(mean_label),

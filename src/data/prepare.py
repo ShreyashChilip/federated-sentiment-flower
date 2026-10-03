@@ -18,6 +18,7 @@ from __future__ import annotations
 
 import hashlib
 import json
+import sqlite3
 from dataclasses import dataclass
 from pathlib import Path
 
@@ -116,6 +117,8 @@ def _write_csr_stream(out: Path, name: str, matrices, shape: tuple[int, int]) ->
             (matrix.indptr[1:].astype(np.int64, copy=False) + nnz).tofile(indptr_file)
             nnz += matrix.nnz
             rows += matrix.shape[0]
+    if rows != shape[0]:
+        raise ValueError(f"streamed CSR row count mismatch for {name}: expected {shape[0]}, got {rows}")
     (out / f"{name}.raw.json").write_text(json.dumps({
         "shape": [rows, shape[1]],
         "data_dtype": str(np.dtype(data_dtype)),
@@ -155,37 +158,113 @@ def _build_natural(cfg: dict, out: Path) -> dict:
     definition = data.get("client_definition")
     if definition not in amazon2023.CLIENT_DEFINITIONS:
         raise ValueError(f"data.client_definition must be one of {amazon2023.CLIENT_DEFINITIONS}, got {definition!r}")
-    table, source = amazon2023.load_reviews(data, cache_root(cfg))
-    raw_codes, _ = natural.encode_clients(table[definition].to_numpy())
-    keep, filter_report = natural.filter_clients(raw_codes, data["client_filter"])
-    table = table.loc[keep, [definition, "label", "text"]].reset_index(drop=True)
-    del raw_codes, keep
-    codes, keys = natural.encode_clients(table[definition].to_numpy())
-    labels = table["label"].to_numpy().astype(np.int64)
+    store_path, source = amazon2023.open_review_store(data, cache_root(cfg))
+    raw_keys, raw_class_counts = amazon2023.client_counts(store_path, definition)
+    raw_sizes = raw_class_counts.sum(axis=1)
+    rule = data["client_filter"]
+    if rule.get("min_reviews") is None:
+        raise ValueError("data.client_filter.min_reviews is not set; run client profiling before training")
+    kept_indices = np.flatnonzero(raw_sizes >= int(rule["min_reviews"]))
+    filter_rng = np.random.default_rng(int(rule.get("filter_seed", 0)))
+    if rule.get("max_clients") and len(kept_indices) > int(rule["max_clients"]):
+        kept_indices = np.sort(filter_rng.choice(kept_indices, size=int(rule["max_clients"]), replace=False))
+    keys = [raw_keys[i] for i in kept_indices]
+    cap = int(rule["max_reviews"]) if rule.get("max_reviews") else None
+    clients_capped = int(sum(raw_sizes[i] > cap for i in kept_indices)) if cap else 0
+    retained_count = int(sum(min(int(raw_sizes[i]), cap) if cap else int(raw_sizes[i]) for i in kept_indices))
+    filter_report = {
+        "rule": {k: rule.get(k) for k in ("min_reviews", "max_reviews", "max_clients", "filter_seed")},
+        "raw_clients": len(raw_keys), "raw_records": int(source["cleaning_counts"]["kept"]),
+        "clients_retained": len(keys), "records_retained": retained_count,
+        "record_fraction_retained": retained_count / source["cleaning_counts"]["kept"],
+        "clients_capped": clients_capped,
+    }
 
     hold = data["holdout"]
     holdout_seed = derive_seed("holdout", data["dataset"], hold.get("holdout_seed", 0))
     seen, unseen = natural.split_clients(np.arange(len(keys)), float(hold["unseen_fraction"]), holdout_seed)
     role_seed = derive_seed("roles", data["dataset"], data.get("role_seed", 0))
-    roles = natural.assign_roles_within_clients(codes, seen, data["role_fractions"], role_seed)
-    overlap = natural.assert_no_client_overlap(codes, roles)
+    roles_rng = np.random.default_rng(role_seed)
+    n_rows = retained_count
+    labels = np.empty(n_rows, dtype=np.int64)
+    codes = np.empty(n_rows, dtype=np.int64)
+    roles = np.full(n_rows, natural.UNSEEN, dtype=np.int8)
 
-    texts = table["text"].tolist()
-    del table
+    with sqlite3.connect(store_path) as connection:
+        connection.execute("PRAGMA temp_store=FILE")
+        connection.execute("CREATE TEMP TABLE selected_clients(client_key TEXT PRIMARY KEY, client_code INTEGER)")
+        connection.executemany("INSERT INTO selected_clients VALUES(?,?)", ((key, code) for code, key in enumerate(keys)))
+        connection.execute("CREATE TEMP TABLE selected_sources(source_row_id INTEGER PRIMARY KEY, client_code INTEGER)")
+        if cap is None:
+            connection.execute("""INSERT INTO selected_sources
+                SELECT r.row_id, c.client_code FROM reviews r JOIN selected_clients c
+                ON r.""" + definition + """=c.client_key ORDER BY r.row_id""")
+        else:
+            for client_code, raw_index in enumerate(kept_indices):
+                key = raw_keys[int(raw_index)]
+                if raw_sizes[raw_index] > cap:
+                    row_ids = np.fromiter((row[0] for row in connection.execute(
+                        f"SELECT row_id FROM reviews WHERE {definition}=? ORDER BY row_id", (key,))), dtype=np.int64)
+                    selected = np.sort(filter_rng.permutation(row_ids)[:cap])
+                    connection.executemany("INSERT INTO selected_sources VALUES(?,?)",
+                                           ((int(row_id), client_code) for row_id in selected))
+                else:
+                    connection.execute(f"""INSERT INTO selected_sources
+                        SELECT row_id, ? FROM reviews WHERE {definition}=? ORDER BY row_id""", (client_code, key))
+        connection.execute("CREATE TEMP TABLE bundle_rows(seq INTEGER PRIMARY KEY, source_row_id INTEGER UNIQUE, client_code INTEGER, role INTEGER)")
+        connection.execute("""INSERT INTO bundle_rows(seq,source_row_id,client_code,role)
+            SELECT ROW_NUMBER() OVER (ORDER BY source_row_id)-1,source_row_id,client_code,?
+            FROM selected_sources ORDER BY source_row_id""", (natural.UNSEEN,))
+        actual_rows = connection.execute("SELECT COUNT(*) FROM bundle_rows").fetchone()[0]
+        if actual_rows != n_rows:
+            raise RuntimeError(f"retained row count mismatch: expected {n_rows}, selected {actual_rows}")
+        connection.execute("CREATE INDEX bundle_rows_client_role_idx ON bundle_rows(client_code,role,seq)")
+        for row in connection.execute("SELECT seq,client_code,label FROM bundle_rows JOIN reviews ON row_id=source_row_id ORDER BY seq"):
+            seq, client_code, label = row
+            labels[seq] = label
+            codes[seq] = client_code
 
-    def train_texts_by_client():
-        for client_id in range(len(keys)):
-            rows = np.flatnonzero((codes == client_id) & (roles == TRAIN))
-            yield [texts[i] for i in rows]
+        seen_mask = np.zeros(len(keys), dtype=bool)
+        seen_mask[seen] = True
+        for client_code in range(len(keys)):
+            if not seen_mask[client_code]:
+                continue
+            seqs = np.fromiter((row[0] for row in connection.execute(
+                "SELECT seq FROM bundle_rows WHERE client_code=? ORDER BY seq", (client_code,))), dtype=np.int64)
+            shuffled = roles_rng.permutation(seqs)
+            n = len(seqs)
+            n_test = max(1, int(round(data["role_fractions"][2] * n))) if n >= 2 else 0
+            n_val = int(round(data["role_fractions"][1] * n)) if n - n_test >= 2 else 0
+            n_train = n - n_val - n_test
+            roles[shuffled[:n_train]] = TRAIN
+            roles[shuffled[n_train:n_train + n_val]] = natural.VAL
+            roles[shuffled[n_train + n_val:]] = natural.CLIENT_TEST
+        connection.executemany("UPDATE bundle_rows SET role=? WHERE seq=?",
+                               ((int(role), seq) for seq, role in enumerate(roles)))
 
-    vec = FederatedTfidf(cfg["features"]).fit_federated(train_texts_by_client())
+        overlap = natural.assert_no_client_overlap(codes, roles)
 
-    def transformed_chunks():
-        chunk_size = 50_000
-        for start in range(0, len(texts), chunk_size):
-            yield vec.transform(texts[start:start + chunk_size])
+        def train_texts_by_client():
+            for client_code in seen:
+                client_code = int(client_code)
+                cursor = connection.execute("""SELECT r.text FROM bundle_rows b JOIN reviews r
+                    ON r.row_id=b.source_row_id WHERE b.client_code=? AND b.role=? ORDER BY b.seq""",
+                    (client_code, TRAIN))
+                def text_batches(cursor=cursor):
+                    while batch := cursor.fetchmany(5000):
+                        yield [row[0] for row in batch]
+                yield text_batches()
 
-    _write_csr_stream(out, "x_train", transformed_chunks(), (len(texts), len(vec.vocabulary_)))
+        vec = FederatedTfidf(cfg["features"]).fit_federated(train_texts_by_client())
+
+        def transformed_chunks():
+            cursor = connection.execute("""SELECT r.text FROM bundle_rows b JOIN reviews r
+                ON r.row_id=b.source_row_id ORDER BY b.seq""")
+            while batch := cursor.fetchmany(10_000):
+                yield vec.transform([row[0] for row in batch])
+
+        _write_csr_stream(out, "x_train", transformed_chunks(), (n_rows, len(vec.vocabulary_)))
+
     np.save(out / "y_train.npy", labels)
     np.save(out / "roles.npy", roles)
     np.save(out / "client_codes.npy", codes)
@@ -195,7 +274,6 @@ def _build_natural(cfg: dict, out: Path) -> dict:
     num_features = len(vec.vocabulary_)
     fit_documents = int(vec.n_docs_)
     vocabulary_hash = hashlib.sha256((out / "vocabulary.json").read_bytes()).hexdigest()
-    del texts, vec
     return {
         "kind": "natural", "dataset": data["dataset"], "num_classes": amazon2023.NUM_CLASSES,
         "num_features": num_features, "fit_documents": fit_documents,

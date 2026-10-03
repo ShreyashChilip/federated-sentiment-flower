@@ -23,6 +23,7 @@ No validation, client-test or global-test document is used for fitting.
 from __future__ import annotations
 
 from collections import Counter
+from collections.abc import Sequence
 
 import numpy as np
 import scipy.sparse as sp
@@ -72,16 +73,26 @@ class FederatedTfidf:
     def fit(self, train_texts) -> "FederatedTfidf":
         return self._finalize(*term_statistics(train_texts, self.cfg))
 
-    def fit_federated(self, client_texts: list) -> "FederatedTfidf":
-        """Build the same feature space from per-client statistics only."""
+    def fit_federated(self, client_texts) -> "FederatedTfidf":
+        """Build the same feature space from per-client statistics only.
+
+        Each client may be supplied as a sequence of documents or as an
+        iterator of document batches, so a single large client need not be
+        materialized in memory.
+        """
         tf, df, n = Counter(), Counter(), 0
         for texts in client_texts:
-            if len(texts) == 0:
-                continue
-            c_terms, c_tf, c_df, c_n = term_statistics(texts, self.cfg)
-            tf.update(dict(zip(c_terms.tolist(), c_tf.tolist())))
-            df.update(dict(zip(c_terms.tolist(), c_df.tolist())))
-            n += c_n
+            if isinstance(texts, Sequence):
+                batches = (texts[start:start + 5000] for start in range(0, len(texts), 5000))
+            else:
+                batches = iter(texts)
+            for batch in batches:
+                if not batch:
+                    continue
+                c_terms, c_tf, c_df, c_n = term_statistics(batch, self.cfg)
+                tf.update(dict(zip(c_terms.tolist(), c_tf.tolist())))
+                df.update(dict(zip(c_terms.tolist(), c_df.tolist())))
+                n += c_n
         terms = np.array(sorted(tf), dtype=object)
         return self._finalize(
             terms, np.array([tf[t] for t in terms], dtype=np.int64), np.array([df[t] for t in terms], dtype=np.int64), n
