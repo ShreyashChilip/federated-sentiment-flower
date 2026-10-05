@@ -3,6 +3,15 @@
 Protocol and code changes that can affect results. Each entry states whether
 results had been seen when the change was made.
 
+## 2026-10-06 (pilot analysis no longer labelled as screening evidence)
+
+* `analyze_stage` applied the screening rules to every stage, so the Job 1
+  pilot analysis reported `"screening_outcome": "candidate"`. Screening rules
+  now run only for stages of kind `evaluate` (screening/confirmation); pilot
+  and tuning stages report `not_applicable` with no cells or candidates.
+  Thresholds, rules, algorithms, data and frozen configs unchanged. The Job 1
+  pilot label is void. Tests: `tests/test_benchmark_screening.py`.
+
 ## 2026-10-06 (OOM fix validated on Kaggle and promoted; no scientific result existed)
 
 * Kaggle CPU session (31.35 GB RAM), commit a3b07c5 (scratch branch

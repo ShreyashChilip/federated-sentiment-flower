@@ -286,9 +286,9 @@ def analyze_stage(bench: dict, stage: str, out_dir: Path | None = None) -> dict:
             ("ct_client_min5_f1_p10", "Seen: P10 client F1"), ("ct_client_min5_f1_worst", "Seen: worst client F1")])
         seeds = sorted({r["seed"] for r in runs})
         plot_client_ecdf(clients, out / "figures", seeds[0])
-    from src.benchmark.screening import screen
+    from src.benchmark.screening import screen_stage
 
-    screening = screen(runs)
+    screening = screen_stage(bench["stages"][stage]["kind"], runs)
     (out / "screening_rules.json").write_text(json.dumps(screening, indent=1, default=str), encoding="utf-8")
     info = {"stage": stage, "runs": len(runs), "screening_outcome": screening["outcome"], "regimes": sorted({r["regime"] for r in runs}),
             "commits": sorted({str(r["git_commit"]) for r in runs}), "all_official": all(r["official"] for r in runs),

@@ -22,3 +22,26 @@ def test_thresholds_are_absolute_on_the_metric_scale():
     cell = S.evaluate_cell(runs_for(0.900, 0.879, 0.5, 0.5), "amazon_vg", "held_client_min5_f1_mean",
                            "amazon_vg", "ct_client_min5_f1_mean", False)
     assert cell["c1_material"] and cell["c3_heterogeneity_specific"] and cell["candidate"]
+
+
+def test_pilot_and_tuning_results_are_never_screening_evidence():
+    # Runs that WOULD satisfy every screening criterion ...
+    runs = runs_for(0.900, 0.879, 0.5, 0.5)
+    assert S.screen_stage("evaluate", runs)["outcome"] == "candidate"
+    # ... are not labelled as a candidate when they come from a pilot or tuning stage.
+    for kind in ("pilot", "tune_base", "tune_algorithms"):
+        out = S.screen_stage(kind, runs)
+        assert out["outcome"] == "not_applicable" and out["candidates_ranked"] == [] and out["cells"] == []
+
+
+def test_analysis_of_a_pilot_stage_reports_not_applicable(tmp_path):
+    import json
+    from src.benchmark import analysis
+    from src.benchmark import plan as P
+    from src.utils.config import deep_merge
+
+    bench = deep_merge(P.load_benchmark("smoke_bench/benchmark.yaml"), {"results_dir": str(tmp_path)})
+    info = analysis.analyze_stage(bench, "pilot")
+    assert info["screening_outcome"] == "not_applicable"
+    rules = json.loads((P.stage_dir(bench, "pilot") / "analysis" / "screening_rules.json").read_text())
+    assert rules["outcome"] == "not_applicable"

@@ -93,3 +93,17 @@ def screen(runs) -> dict:
     ranked = sorted([c for c in cells if c["candidate"]], key=lambda c: -c["heterogeneity_excess"])
     return {"cells": cells, "candidates_ranked": ranked, "failure_patterns": failure_patterns(runs),
             "outcome": "candidate" if ranked else "no_candidate"}
+
+
+def screen_stage(stage_kind: str, runs) -> dict:
+    """Apply the screening rules only to a scientific evaluation stage.
+
+    Pilot runs (seed 0, a few rounds) and tuning runs (seed 7, validation only)
+    are not screening evidence; for them the outcome is ``not_applicable`` and
+    no cell or candidate is computed.
+    """
+    if stage_kind != "evaluate":
+        return {"outcome": "not_applicable", "stage_kind": stage_kind, "cells": [], "candidates_ranked": [],
+                "failure_patterns": [],
+                "reason": "screening rules apply only to evaluation stages (screening/confirmation)"}
+    return {**screen(runs), "stage_kind": stage_kind}
