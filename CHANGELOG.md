@@ -3,6 +3,17 @@
 Protocol and code changes that can affect results. Each entry states whether
 results had been seen when the change was made.
 
+## 2026-10-05 (screening threshold units clarified; no benchmark run had been made)
+
+* `docs/BENCHMARK_PROTOCOL.md` section 6 and `src/benchmark/screening.py` both
+  define Delta = 0.02 (mean/pooled) and 0.05 (tail). The unit was not
+  stated. It is now written out: Delta is an absolute difference on the 0-1
+  metric scale (0.02 = 2 percentage points), the same for every regime
+  including 5-class Amazon, not a relative margin. This is what the code
+  already did; no value or rule changed. A test pins it
+  (`tests/test_benchmark_screening.py`). An earlier chat summary that called
+  the protocol margin "2%" was a misstatement, not a protocol text.
+
 ## 2026-10-05 (FL strategy benchmark fedbench_v1, Phase 1; no benchmark result existed)
 
 * Experiment 0A is treated as a completed negative/diagnostic result. Its

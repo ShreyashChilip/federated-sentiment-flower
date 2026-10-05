@@ -70,7 +70,10 @@ summarized within the run and never used as independent replicates.
 Notation: for regime r, metric M, method a, seed s: M(r, a, s). "Shortfall"
 of a = M(r, centralized, s) - M(r, a, s) (higher-is-better metrics).
 Thresholds: Delta = 0.02 for pooled and mean-client metrics, 0.05 for tail
-metrics (P10 and worst client).
+metrics (P10 and worst client). Delta is an **absolute** difference on the
+0-1 scale of the metric (0.02 = 2 percentage points of macro-F1 or
+accuracy), the same for every regime, including the 5-class Amazon task;
+it is not a relative (percent-of-value) margin.
 
 A **candidate failure mode** is a (regime, metric) cell such that
 

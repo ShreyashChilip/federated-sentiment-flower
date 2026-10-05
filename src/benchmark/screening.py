@@ -8,6 +8,8 @@ from __future__ import annotations
 import numpy as np
 
 FL = ["fedavg", "fedprox", "fednova", "scaffold", "fedadam", "fedadagrad", "fedyogi"]
+# Absolute differences on the 0-1 metric scale (0.02 = 2 percentage points), the
+# same for every regime; not relative margins (protocol section 6).
 DELTA_MEAN, DELTA_TAIL = 0.02, 0.05
 
 # (regime, metric, control regime, control metric, is_tail)
