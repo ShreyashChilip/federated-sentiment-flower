@@ -18,6 +18,7 @@ import shutil
 import subprocess
 import sys
 import time
+import zipfile
 from pathlib import Path
 
 JOB = {
@@ -29,6 +30,7 @@ JOB = {
     "analyze": [],              # stages to analyze at the end
     "keep_bundles": True,       # copy built feature bundles into the output for the next session
     "extra_args": [],
+    "slug": "job",
 }
 
 T0 = time.time()
@@ -103,8 +105,21 @@ def main() -> None:
     if JOB["keep_bundles"]:
         for b in (CODE / "data_cache" / "features").glob("*"):
             if b.is_dir() and not b.is_symlink() and (b / "meta.json").exists() and not (OUT_BUNDLES / b.name).exists():
+                size = sum(f.stat().st_size for f in b.rglob("*") if f.is_file()) / 2**30
+                used = sum(f.stat().st_size for f in WORK.rglob("*") if f.is_file()) / 2**30
+                if used + size > 17:   # Kaggle keeps at most ~20 GB of output; never risk losing the results
+                    print(f"NOT saving bundle {b.name} ({size:.1f} GB): output would exceed 17 GB", flush=True)
+                    continue
                 shutil.copytree(b, OUT_BUNDLES / b.name)
-                print(f"saved bundle {b.name}", flush=True)
+                print(f"saved bundle {b.name} ({size:.1f} GB)", flush=True)
+    # One compact archive to download (results + partitions; bundles stay as kernel output only).
+    archive = WORK / f"fedbench_results_{JOB['slug']}.zip"
+    with zipfile.ZipFile(archive, "w", zipfile.ZIP_DEFLATED) as z:
+        for base in (OUT_RESULTS, OUT_PARTITIONS):
+            for f in base.rglob("*"):
+                if f.is_file():
+                    z.write(f, f.relative_to(WORK))
+    print(f"archive {archive} ({archive.stat().st_size / 2**20:.0f} MB)", flush=True)
     print(f"done in {(time.time() - T0) / 3600:.2f} h", flush=True)
 
 

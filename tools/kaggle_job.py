@@ -50,7 +50,7 @@ def main() -> None:
         user = input_user()
     job = {"repo": git("remote", "get-url", "origin"), "commit": commit, "stages": args.stages,
            "max_hours": args.max_hours, "diagnostics": [d.split(":") for d in args.diagnostics],
-           "analyze": args.analyze, "keep_bundles": True, "extra_args": args.extra}
+           "analyze": args.analyze, "keep_bundles": True, "extra_args": args.extra, "slug": args.slug}
     src = (ROOT / "notebooks" / "kaggle_benchmark.py").read_text(encoding="utf-8")
     src = re.sub(r"JOB = \{.*?\n\}\n", "JOB = " + json.dumps(job, indent=4) + "\n", src, count=1, flags=re.S)
     out = args.out / args.slug
