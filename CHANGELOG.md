@@ -3,6 +3,19 @@
 Protocol and code changes that can affect results. Each entry states whether
 results had been seen when the change was made.
 
+## 2026-10-06 (OOM fix validated on Kaggle and promoted; no scientific result existed)
+
+* Kaggle CPU session (31.35 GB RAM), commit a3b07c5 (scratch branch
+  `fedbench-oomfix`): `pilot/amazon_vg/fedavg/seed0` COMPLETE (attempt 2;
+  attempt 1 at 10f519b stays recorded as killed, return code -9), 2231 s
+  wall including the build of the Video_Games feature bundle (2.3 GB), no
+  OOM/SIGKILL. COMPLETE is written only after artifact validation (seed,
+  config hash, partition hash, round count, held-out metrics). Evidence as
+  reported from the Kaggle log; the archive is not in the repository.
+* `fedbench` fast-forwarded to a3b07c5 (no history rewritten). Partition
+  algorithm, contents and hashes unchanged; frozen 0A/0B configs unchanged.
+* Pilot metrics are engineering checks only and are not used for any decision.
+
 ## 2026-10-05 (memory bug: Amazon pilot OOM-killed; fix before any result)
 
 * Job 1 (commit 10f519b): the Yelp pilots completed; `pilot/amazon_vg/fedavg/seed0`

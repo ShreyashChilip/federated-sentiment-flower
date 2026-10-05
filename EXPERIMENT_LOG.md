@@ -73,3 +73,18 @@ This run exposed the Kaggle-detection bug recorded in `CHANGELOG.md`.
   Dirichlet draws give every client at least 10 rows.
 
 No number from these checks may be reported.
+
+## 2026-10-05/06 - Benchmark fedbench_v1: Kaggle job 1 and OOM check (engineering, NOT results)
+
+* Job 1 (commit 10f519b, Kaggle CPU): Yelp IID and Dirichlet-0.1 pilots
+  (seed 0, 3 rounds; FedAvg, SCAFFOLD, FedAdam, centralized, local-only)
+  completed. `pilot/amazon_vg/fedavg/seed0` was killed (-9) while loading the
+  natural-client partition: per-client slicing of `npz["indices"]` kept one
+  full index copy per client (`CHANGELOG.md`). Stage stopped as designed;
+  tuning never started. The Job 1 Amazon client diagnostics ran through the
+  same loader and are treated as not produced.
+* The Job 1 pilot analysis printed `"screening_outcome": "candidate"`: the
+  screening rules were applied to pilot runs. That label has no meaning and
+  is discarded; fixed so non-screening stages report `not_applicable`.
+* OOM check (commit a3b07c5): `pilot/amazon_vg/fedavg/seed0` complete in
+  2231 s, no OOM. Fix promoted to `fedbench`.
