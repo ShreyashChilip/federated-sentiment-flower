@@ -1,0 +1,7 @@
+# LAPTOP MEMORY CHECK ONLY. Never reported.
+inherits: benchmark.yaml
+benchmark:
+  name: _smoke_oom
+  results_dir: results/_smoke_oom/bench
+  regimes:
+    amazon_vg: {config: smoke_bench/amazon_many_clients.yaml, cell: natural, base_tuning: fedavg_grid}

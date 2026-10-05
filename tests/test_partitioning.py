@@ -95,3 +95,18 @@ def test_tampered_partition_is_rejected(tmp_path, labels):
     np.savez_compressed(path, **data)
     with pytest.raises(RuntimeError, match="hash"):
         get_partition(tmp_path, "toy", labels, None, 2, cfg, seed=1)
+
+
+def test_loading_many_clients_keeps_one_copy_of_the_indices(tmp_path):
+    """Regression (Kaggle OOM, 2026-10-05): every client must be a view of ONE
+    index array; slicing ``npz[key]`` per client kept a full copy per client."""
+    from src.partitioning.store import load_partition, partition_hash, save_partition
+
+    perm = np.random.default_rng(0).permutation(50_000)
+    clients = [np.sort(c) for c in np.array_split(perm, 5_000)]
+    save_partition(tmp_path, "p", clients, {"sha256": partition_hash(clients)})
+    loaded, _ = load_partition(tmp_path, "p")
+    assert all(np.array_equal(a, b) for a, b in zip(clients, loaded))
+    base = loaded[0].base
+    assert base is not None and base.nbytes == 50_000 * 8
+    assert all(c.base is base for c in loaded)

@@ -67,9 +67,14 @@ def save_partition(directory: Path, name: str, clients, summary: dict) -> Path:
 def load_partition(directory: Path, name: str) -> tuple[list[np.ndarray], dict]:
     with open(directory / f"{name}.json", "r", encoding="utf-8") as f:
         summary = json.load(f)
-    data = np.load(directory / f"{name}.npz")
-    offsets = data["offsets"]
-    clients = [data["indices"][offsets[i]:offsets[i + 1]] for i in range(len(offsets) - 1)]
+    with np.load(directory / f"{name}.npz") as data:
+        # Read each array ONCE: every ``data[key]`` access decompresses the whole
+        # array again, and a per-client slice of it keeps that full copy alive, so
+        # indexing inside the loop costs (clients x rows) memory (OOM with natural
+        # clients). All clients are views into this single array.
+        offsets = data["offsets"]
+        indices = data["indices"]
+    clients = [indices[offsets[i]:offsets[i + 1]] for i in range(len(offsets) - 1)]
     actual = partition_hash(clients)
     if actual != summary["sha256"]:
         raise RuntimeError(f"partition {name}: stored hash {summary['sha256'][:12]} != actual {actual[:12]}")

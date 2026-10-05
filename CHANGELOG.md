@@ -3,6 +3,31 @@
 Protocol and code changes that can affect results. Each entry states whether
 results had been seen when the change was made.
 
+## 2026-10-05 (memory bug: Amazon pilot OOM-killed; fix before any result)
+
+* Job 1 (commit 10f519b): the Yelp pilots completed; `pilot/amazon_vg/fedavg/seed0`
+  was killed with return code -9 after ~169 s. The runner stopped as designed.
+  Nothing from the failed run is used; the failure stays recorded.
+* Cause: `load_partition` indexed `npz["indices"]` inside the per-client loop.
+  Every access decompresses the whole index array, and each client's slice
+  keeps its own full copy alive, so memory grows as clients x rows (measured
+  ~26.7 MB per client at 3.5M rows: 5.3 GB for 200 clients). Yelp (100
+  clients) survived; tens of thousands of natural clients cannot. The array
+  is now read once and every client is a view of it (flat ~27 MB for 20,000
+  clients). Partition contents and hashes are unchanged; the hash check on
+  load still runs. Regression test in `tests/test_partitioning.py`.
+* Checked and ruled out: no dense materialization of TF-IDF; scipy keeps the
+  memory-mapped data/indices as file-backed views (it copies only `indptr`,
+  rows x 4 bytes); training/evaluation never load the held-out matrix; one
+  model per process; no data duplication across processes (one worker at a
+  time).
+* Laptop memory check (`configs/smoke_bench/*many_clients.yaml`, SYNTHETIC):
+  4,800 seen product clients, 420,814 reviews: FedAvg pilot completes,
+  peak RSS 480 MB.
+* `tools/kaggle_job.py` gained `--only` and `--retry-failed` pass-through.
+* The same bug also affects `experiments/client_diagnostics.py` (it uses
+  `load_runtime`); the Job 1 Amazon client diagnostics must be recomputed.
+
 ## 2026-10-05 (Kaggle job generator fix; no experiment had run)
 
 * Job 1 stopped on Kaggle before any run with `NameError: name 'true' is not

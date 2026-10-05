@@ -1,0 +1,8 @@
+# LAPTOP MEMORY CHECK ONLY (OOM regression, 2026-10-05). SYNTHETIC reviews with
+# thousands of product clients. Never reported.
+inherits: amazon.yaml
+experiment: {name: _smoke_oom_amazon}
+data:
+  local_path: results/_smoke_oom/Synthetic_big.jsonl
+features: {max_features: 5000, min_df: 2}
+fl: {rounds: 3, fraction_fit: 0.1}
