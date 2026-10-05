@@ -1,0 +1,10 @@
+# LAPTOP SOFTWARE CHECK ONLY. Never reported. Tiny Yelp subset with 0A-like cells.
+inherits: ../smoke.yaml
+experiment: {name: _smoke_bench_yelp}
+partition: {dir: partitions/_smoke}
+cells:
+  iid: {scheme: iid, num_clients: 6}
+  label_skew: {scheme: dirichlet_client, alpha: 0.1, num_clients: 6}
+fl: {rounds: 4, fraction_fit: 0.5, lr: 0.3, weight_decay: 0.000001}
+centralized: {epochs: 2}
+local_only: {epochs: 2}

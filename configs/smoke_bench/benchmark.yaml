@@ -1,0 +1,18 @@
+# LAPTOP SOFTWARE CHECK of the staged pipeline. Never reported.
+inherits: ../benchmark.yaml
+benchmark:
+  name: _smoke_bench
+  results_dir: results/_smoke_benchmark
+  regimes:
+    yelp_iid: {config: smoke_bench/yelp.yaml, cell: iid, base_tuning: inherited}
+    yelp_dir01: {config: smoke_bench/yelp.yaml, cell: label_skew, base_tuning: inherited}
+    amazon_vg: {config: smoke_bench/amazon.yaml, cell: natural, base_tuning: fedavg_grid}
+  base_grid: {lr: [0.1, 0.3], weight_decay: [0.00001]}
+  algorithm_grids:
+    fedprox: {mu: [0.01, 0.1]}
+    fedadam: {server_lr: [0.03, 0.1]}
+    fedadagrad: {server_lr: [0.03, 0.1]}
+    fedyogi: {server_lr: [0.03, 0.1]}
+  stages:
+    pilot: {overrides: {fl: {rounds: 2}, centralized: {epochs: 1}, local_only: {epochs: 1}}}
+    screening: {seeds: [42, 123]}

@@ -1,0 +1,13 @@
+# LAPTOP SOFTWARE CHECK ONLY. SYNTHETIC reviews (tests/synthetic_reviews.py). Never reported.
+inherits: ../exp0b_product.yaml
+experiment: {name: _smoke_bench_amazon}
+device: cpu
+data:
+  local_path: results/_smoke_bench_data/Synthetic.jsonl
+  category: Synthetic
+  client_filter: {min_reviews: 10}
+features: {max_features: 300, min_df: 1}
+partition: {dir: partitions/_smoke}
+fl: {rounds: 4, fraction_fit: 0.5}
+centralized: {epochs: 2}
+local_only: {epochs: 2}

@@ -1,0 +1,78 @@
+# Systematic FL strategy benchmark (protocol "fedbench_v1").
+#
+# Written 2026-10-05 BEFORE any benchmark run. The scientific settings of
+# every regime are inherited unchanged from the frozen experiment configs:
+#   yelp_*     configs/exp0a_tuned.yaml  (Experiment 0A protocol, lr/wd tuned on Kaggle)
+#   amazon_vg  configs/exp0b_frozen.yaml (Experiment 0B protocol; lr/wd tuned by stage tune_base)
+# Only the settings under `common` are added. They concern the execution
+# engine, not the science (see docs/BENCHMARK_PROTOCOL.md).
+#
+# Stages are run in order. Every stage is resumable; a finished run is never
+# re-run or overwritten.
+
+benchmark:
+  name: fedbench_v1
+  results_dir: results/benchmark
+
+  common:
+    device: cpu            # sequential CPU engine; deterministic; Kaggle CPU sessions
+    client_threads: 1
+    eval:
+      every: 1             # seen-client validation every round
+      full_every: 10       # client-test and held-out evaluation every 10 rounds and at the end
+
+  regimes:
+    yelp_iid:
+      config: exp0a_tuned.yaml
+      cell: iid
+      base_tuning: inherited        # lr = 0.3, wd = 1e-6 from the frozen 0A tuning
+    yelp_dir01:
+      config: exp0a_tuned.yaml
+      cell: label_skew              # dirichlet_client/v1, alpha 0.1, 100 clients
+      base_tuning: inherited
+    amazon_vg:
+      config: exp0b_frozen.yaml
+      cell: natural                 # Video_Games, parent_asin, min_reviews 20, 20% unseen clients
+      base_tuning: fedavg_grid
+
+  # Frozen 0B tuning protocol (also the 0A one): FedAvg, seed 7, seen-client
+  # validation macro-F1 after the last round; ties -> smaller lr, then larger wd.
+  base_grid:
+    lr: [0.03, 0.1, 0.3]
+    weight_decay: [0.000001, 0.00001, 0.0001]
+
+  tuning_seed: 7
+  # Algorithm-specific hyperparameters only. Client lr and wd are inherited
+  # from the base tuning by every algorithm. Ties -> smaller value.
+  algorithm_grids:
+    fedavg: {}
+    fedprox: {mu: [0.001, 0.01, 0.1, 1.0]}
+    fednova: {}
+    scaffold: {}
+    fedadam: {server_lr: [0.01, 0.03, 0.1, 0.3, 1.0]}
+    fedadagrad: {server_lr: [0.01, 0.03, 0.1, 0.3, 1.0]}
+    fedyogi: {server_lr: [0.01, 0.03, 0.1, 0.3, 1.0]}
+
+  # Rounds-to-target: target = this fraction of the tuned FedAvg validation
+  # macro-F1 of the tuning run of the same regime (validation data only).
+  target_fraction_of_tuned_fedavg: 0.95
+
+  stages:
+    pilot:                          # engineering only: time, memory, artifacts
+      kind: pilot
+      seeds: [0]
+      regimes: [yelp_iid, yelp_dir01, amazon_vg]
+      methods: [fedavg, scaffold, fedadam, centralized, local_only]
+      overrides: {fl: {rounds: 3}, centralized: {epochs: 1}, local_only: {epochs: 1}}
+    tune_base:
+      kind: tune_base
+      regimes: [amazon_vg]
+    tune_algorithms:
+      kind: tune_algorithms
+      regimes: [yelp_iid, yelp_dir01, amazon_vg]
+    screening:
+      kind: evaluate
+      # Fixed before any result: the first three official seeds in list order.
+      seeds: [42, 123, 456]
+      regimes: [yelp_iid, yelp_dir01, amazon_vg]
+      methods: [centralized, local_only, fedavg, fedprox, fednova, scaffold, fedadam, fedadagrad, fedyogi]

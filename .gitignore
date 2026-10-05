@@ -14,3 +14,6 @@ results/_smoke*
 *.npz
 !partitions/**/*.npz
 partitions/_smoke/
+
+# Kaggle job folders prepared by tools/kaggle_job.py
+.kaggle_jobs/

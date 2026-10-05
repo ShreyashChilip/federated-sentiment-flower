@@ -38,5 +38,8 @@ def metrics_from_confusion(cm: np.ndarray) -> dict:
         "macro_precision": float(precision[present].sum() / k),
         "macro_recall": float(recall[present].sum() / k),
         "per_class_f1": f1.tolist(),
+        "per_class_precision": precision.tolist(),
+        "per_class_recall": recall.tolist(),
+        "per_class_support": support.astype(np.int64).tolist(),
         "confusion_matrix": cm.astype(np.int64).tolist(),
     }

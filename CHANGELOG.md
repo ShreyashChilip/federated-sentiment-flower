@@ -3,6 +3,34 @@
 Protocol and code changes that can affect results. Each entry states whether
 results had been seen when the change was made.
 
+## 2026-10-05 (FL strategy benchmark fedbench_v1, Phase 1; no benchmark result existed)
+
+* Experiment 0A is treated as a completed negative/diagnostic result. Its
+  official outputs are not in the repository; nothing below changes 0A code
+  paths or configs.
+* New package `src/benchmark/`: one algorithm interface (FedAvg, FedProx,
+  FedNova, SCAFFOLD, FedAdam, FedAdagrad, FedYogi) with streaming
+  aggregation; sequential CPU simulation engine; chunked evaluator with
+  per-client seen/unseen metrics; disk-backed SCAFFOLD client state;
+  resource estimator; staged resumable orchestrator with subprocess
+  isolation, failure/OOM classification and manifests; analysis, screening
+  rules and model-free client descriptors. Update rules verified against the
+  original papers (`docs/ALGORITHM_VERIFICATION.md`). FedAvg and SCAFFOLD
+  final weights are bit-identical to the Phase 0 Flower path (test).
+* Benchmark FedAdam/FedYogi/FedAdagrad initialize v = tau^2 (Reddi et al.);
+  the Phase 0 Flower FedAdam (v = 0) is unchanged and not used by the benchmark.
+* Protocol and screening decision rules pre-registered in
+  `docs/BENCHMARK_PROTOCOL.md`; matrix in `configs/benchmark.yaml`. Screening
+  seeds fixed to 42, 123, 456 (first three official seeds).
+* `prepare_run` no longer loads the held-out split (it only needs labels,
+  roles and client codes); for natural bundles this avoids a full copy of the
+  unseen-client matrix. No data or result changes.
+* Metrics gained per-class precision/recall/support and P25/P75/P90 client
+  percentiles (additional keys only).
+* Engine settings added for the benchmark only: `device: cpu`,
+  `eval.full_every: 10`. The frozen 0A/0B scientific settings are inherited
+  unchanged.
+
 ## 2026-10-03 (Experiment 0B memory handling; no official result existed)
 
 * Natural-client preprocessing now releases the raw review rows and duplicate
