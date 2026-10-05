@@ -356,3 +356,55 @@ def write_manifest(bench: dict, stage: str, specs: list[dict] | None = None) -> 
                                            ("complete", "failed", "incomplete", "pending")},
                                 "runs": rows}, indent=1), encoding="utf-8")
     return path
+
+
+# ---- verification ---------------------------------------------------------------
+def verify_stage(bench: dict, stage: str) -> dict:
+    """Re-validate every complete run and check consistency across runs.
+
+    * every COMPLETE run still passes ``validate_run`` (files, seed, config hash,
+      partition hash, rounds, held-out metrics);
+    * per regime: one feature bundle and one vocabulary;
+    * per regime: one partition hash for natural clients (seed-independent),
+      one per seed for synthetic partitions (identical across methods);
+    * validated client diagnostics of the regime use the same partition.
+    """
+    specs = P.plan_stage(bench, stage)
+    problems, runs = [], []
+    for spec in specs:
+        if not is_complete(spec):
+            continue
+        for p in validate_run(spec):
+            problems.append(f"{spec['key']}: {p}")
+        meta = json.loads((Path(spec["run_dir"]) / "run_metadata.json").read_text(encoding="utf-8"))
+        runs.append({"key": spec["key"], "regime": spec["regime"], "seed": spec["seed"],
+                     "kind": meta["partition"]["type"], "partition": meta["partition"]["sha256"],
+                     "vocabulary": meta.get("vocabulary_sha256"), "bundle": Path(meta["bundle_dir"]).name,
+                     "commit": meta["environment"]["git"].get("commit"), "dirty": meta["environment"]["git"].get("dirty"),
+                     "official": meta["official_environment"]})
+    for regime in sorted({r["regime"] for r in runs}):
+        rr = [r for r in runs if r["regime"] == regime]
+        for field in ("bundle", "vocabulary"):
+            if len({r[field] for r in rr}) > 1:
+                problems.append(f"{regime}: runs use different {field}s {sorted({r[field] for r in rr})}")
+        natural = rr[0]["kind"] == "natural"
+        groups = {"all": rr} if natural else {s: [r for r in rr if r["seed"] == s] for s in {r["seed"] for r in rr}}
+        for key, g in groups.items():
+            if len({r["partition"] for r in g}) > 1:
+                problems.append(f"{regime} seed {key}: runs use different partitions")
+        diag_root = P.results_root(bench) / "diagnostics" / regime
+        for marker in sorted(diag_root.glob("seed*/DIAG_COMPLETE")):
+            seed = int(marker.parent.name[4:])
+            want = {r["partition"] for r in rr if natural or r["seed"] == seed}
+            got = json.loads(marker.read_text(encoding="utf-8"))["partition_sha256"]
+            if want and got not in want:
+                problems.append(f"{regime}: diagnostics {marker.parent.name} used partition {got[:12]}, runs use {sorted(want)}")
+    report = {"stage": stage, "verified_utc": utc(), "complete_runs": len(runs),
+              "not_complete": [s["key"] for s in specs if not is_complete(s)],
+              "commits": sorted({str(r["commit"]) for r in runs}),
+              "all_official": all(r["official"] and not r["dirty"] for r in runs),
+              "problems": problems, "ok": not problems}
+    out = P.stage_dir(bench, stage)
+    out.mkdir(parents=True, exist_ok=True)
+    (out / "verification.json").write_text(json.dumps(report, indent=1), encoding="utf-8")
+    return report

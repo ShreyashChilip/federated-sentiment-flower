@@ -48,21 +48,24 @@ def read_selection(bench: dict, kind: str, regime: str) -> dict:
     return json.loads(path.read_text(encoding="utf-8"))
 
 
-def regime_config(bench: dict, regime: str, *, allow_untuned: bool = False) -> dict:
-    """Frozen experiment config of the regime + engine settings + tuned lr/wd."""
+def regime_config(bench: dict, regime: str, *, untuned: bool = False) -> dict:
+    """Frozen experiment config of the regime + engine settings + tuned lr/wd.
+
+    ``untuned=True`` (pilot, base tuning, model-free diagnostics) never reads a
+    tuning selection, so those specs are identical before and after tuning.
+    Otherwise a regime tuned by ``tune_base`` requires its selection.
+    """
     spec = bench["regimes"][regime]
     cfg = cell_config(load_config(spec["config"]), spec["cell"])
     cfg = deep_merge(cfg, bench.get("common", {}))
     cfg["benchmark"] = {"protocol": bench["name"], "regime": regime}
     if spec["base_tuning"] == "fedavg_grid":
-        try:
+        if untuned:
+            cfg["benchmark"]["base_tuning"] = {"source": "UNTUNED_PILOT_PLACEHOLDER"}
+        else:
             sel = read_selection(bench, "base", regime)
             cfg = deep_merge(cfg, {"fl": {"lr": sel["lr"], "weight_decay": sel["weight_decay"]}})
             cfg["benchmark"]["base_tuning"] = {"source": "tune_base", "lr": sel["lr"], "weight_decay": sel["weight_decay"]}
-        except MissingSelection:
-            if not allow_untuned:
-                raise
-            cfg["benchmark"]["base_tuning"] = {"source": "UNTUNED_PILOT_PLACEHOLDER"}
     else:
         cfg["benchmark"]["base_tuning"] = {"source": spec["config"], "lr": cfg["fl"]["lr"],
                                            "weight_decay": cfg["fl"]["weight_decay"]}
@@ -96,7 +99,7 @@ def plan_stage(bench: dict, stage: str) -> list[dict]:
     specs = []
     if kind == "pilot":
         for regime in st["regimes"]:
-            cfg = deep_merge(regime_config(bench, regime, allow_untuned=True), st.get("overrides", {}))
+            cfg = deep_merge(regime_config(bench, regime, untuned=True), st.get("overrides", {}))
             for method in st["methods"]:
                 c = deep_merge(cfg, {"fl": {k: v for k, v in PILOT_PLACEHOLDERS.items()}})
                 for seed in st["seeds"]:
@@ -105,7 +108,7 @@ def plan_stage(bench: dict, stage: str) -> list[dict]:
     seed_t = int(bench["tuning_seed"])
     if kind == "tune_base":
         for regime in st["regimes"]:
-            cfg = regime_config(bench, regime, allow_untuned=True)
+            cfg = regime_config(bench, regime, untuned=True)
             cfg = deep_merge(cfg, {"eval": {"test": False}})
             for point in _grid(bench["base_grid"]):
                 c = deep_merge(cfg, {"fl": {"lr": point["lr"], "weight_decay": point["weight_decay"]}})

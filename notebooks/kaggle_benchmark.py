@@ -30,6 +30,7 @@ JOB = {
     "analyze": [],              # stages to analyze at the end
     "keep_bundles": True,       # copy built feature bundles into the output for the next session
     "extra_args": [],
+    "verify": [],               # stages whose artifacts are re-validated at the end
     "slug": "job",
 }
 
@@ -46,20 +47,73 @@ def sh(*cmd, check=True, **kw):
     return subprocess.run(list(map(str, cmd)), check=check, **kw)
 
 
-def restore() -> None:
-    """Copy earlier kernel outputs (attached under /kaggle/input) into place."""
-    for src in sorted(Path("/kaggle/input").glob("*")):
-        for name, dest in (("results_benchmark", OUT_RESULTS), ("partitions", OUT_PARTITIONS)):
-            if (src / name).is_dir():
-                print(f"restore {src / name} -> {dest}", flush=True)
-                shutil.copytree(src / name, dest, dirs_exist_ok=True)
-        if (src / "bundles").is_dir():
-            for b in (src / "bundles").iterdir():
-                target = CODE / "data_cache" / "features" / b.name
-                if not target.exists():
-                    target.parent.mkdir(parents=True, exist_ok=True)
-                    os.symlink(b, target)   # read-only input; bundles are only read after build
-                    print(f"link bundle {b.name}", flush=True)
+def _find(inputs: Path, name: str) -> list[Path]:
+    """Directories called ``name`` in attached inputs (notebook outputs may be nested once)."""
+    return sorted(set(inputs.glob(f"*/{name}")) | set(inputs.glob(f"*/*/{name}")))
+
+
+def _merge_status(a: dict, b: dict) -> dict:
+    """Union of the attempts of one run recorded by different sessions, by start time."""
+    seen, attempts = set(), []
+    for att in sorted(a["attempts"] + b["attempts"], key=lambda x: x["start_utc"]):
+        key = (att["start_utc"], att.get("log"))
+        if key not in seen:
+            seen.add(key)
+            attempts.append(att)
+    return {**a, "attempts": attempts}
+
+
+def merge_tree(src: Path, dest: Path, origin: str, conflicts: list) -> None:
+    """Copy ``src`` into ``dest`` without losing or silently replacing anything.
+
+    identical file: skip; status files: union of attempts; differing logs: both kept;
+    regenerated summaries (manifest/verification/analysis): keep existing;
+    any other differing file (immutable run artifact, partition): recorded as a conflict.
+    """
+    for f in sorted(src.rglob("*")):
+        if not f.is_file():
+            continue
+        rel = f.relative_to(src)
+        target = dest / rel
+        target.parent.mkdir(parents=True, exist_ok=True)
+        if not target.exists():
+            shutil.copy2(f, target)
+        elif target.read_bytes() == f.read_bytes():
+            continue
+        elif "_status" in rel.parts:
+            merged = _merge_status(json.loads(target.read_text()), json.loads(f.read_text()))
+            target.write_text(json.dumps(merged, indent=1))
+            print(f"merged status {rel} ({len(merged['attempts'])} attempts)", flush=True)
+        elif "_logs" in rel.parts:
+            alt = target.with_name(f"{target.name}.from-{origin}")
+            shutil.copy2(f, alt)
+            print(f"kept both logs: {rel} and {alt.name}", flush=True)
+        elif rel.name in ("manifest.json", "verification.json") or "analysis" in rel.parts:
+            continue
+        else:
+            conflicts.append(f"{origin}: {rel}")
+
+
+def restore(inputs: Path = Path("/kaggle/input")) -> None:
+    """Bring earlier kernel outputs (attached as inputs) into place; abort on any conflict."""
+    conflicts: list = []
+    for name, dest in (("results_benchmark", OUT_RESULTS), ("partitions", OUT_PARTITIONS)):
+        for src in _find(inputs, name):
+            print(f"restore {src} -> {dest}", flush=True)
+            merge_tree(src, dest, src.parent.name, conflicts)
+    features = CODE / "data_cache" / "features"
+    for bundles in _find(inputs, "bundles"):
+        for b in sorted(bundles.iterdir()):
+            target = features / b.name
+            if target.exists():
+                if (target / "meta.json").read_bytes() != (b / "meta.json").read_bytes():
+                    conflicts.append(f"bundle {b.name} differs between inputs")
+                continue
+            features.mkdir(parents=True, exist_ok=True)
+            os.symlink(b, target)   # read-only input; bundles are only read after they are built
+            print(f"link bundle {b.name} from {bundles.parent.name}", flush=True)
+    if conflicts:
+        raise SystemExit("restore found conflicting artifacts; nothing was run:\n  " + "\n  ".join(conflicts))
 
 
 def main() -> None:
@@ -99,6 +153,8 @@ def main() -> None:
         sh(sys.executable, "experiments/analyze_benchmark.py", "--stages", stage, check=False)
     for stage in JOB["stages"]:
         sh(sys.executable, "experiments/run_benchmark.py", "status", "--stages", stage, check=False)
+    if JOB.get("verify"):
+        sh(sys.executable, "experiments/run_benchmark.py", "verify", "--stages", *JOB["verify"], check=False)
 
     for f in (CODE / "partitions").glob("*"):
         if f.is_file() and not (OUT_PARTITIONS / f.name).exists():

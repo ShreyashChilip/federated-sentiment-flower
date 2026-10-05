@@ -33,13 +33,16 @@ def main() -> None:
     ap.add_argument("--no-raw-text", action="store_true")
     args = ap.parse_args()
     bench = P.load_benchmark(args.bench)
+    failed = False
     for regime in args.regimes:
-        cfg = P.regime_config(bench, regime, allow_untuned=True)
+        cfg = P.regime_config(bench, regime, untuned=True)
         for seed in args.seeds:
             out = P.results_root(bench) / "diagnostics" / regime / f"seed{seed}"
-            if (out / "client_features.csv").exists():
-                print(f"skip {regime}/seed{seed} (exists)")
+            if (out / "DIAG_COMPLETE").exists():
+                print(f"skip {regime}/seed{seed} (validated earlier)")
                 continue
+            for stale in ("client_features.csv", "client_features_meta.json"):
+                (out / stale).unlink(missing_ok=True)   # an unvalidated table is never kept
             work = out / "_prepare"
             if work.exists():
                 shutil.rmtree(work)
@@ -55,8 +58,19 @@ def main() -> None:
             meta = {"regime": regime, "seed": seed, "config_hash": config_hash(cfg), "bundle": str(rt.bundle.path),
                     "partition_sha256": run_meta["partition"]["sha256"], "raw_text_measures": store is not None,
                     "environment": collect_environment(PROJECT_ROOT)}
+            problems = client_features.validate(rows, rt, store is not None)
+            meta["validation_problems"] = problems
             print(client_features.write(rows, out, meta), f"{len(rows)} clients")
             shutil.rmtree(work)
+            if problems:
+                print(f"DIAGNOSTICS INVALID {regime}/seed{seed}: " + "; ".join(problems), flush=True)
+                failed = True
+                continue
+            (out / "DIAG_COMPLETE").write_text(json.dumps({"clients": len(rows), "partition_sha256":
+                                                           meta["partition_sha256"]}), encoding="utf-8")
+            print(f"validated {regime}/seed{seed}", flush=True)
+    if failed:
+        raise SystemExit(3)
 
 
 if __name__ == "__main__":

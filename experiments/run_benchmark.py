@@ -11,6 +11,7 @@ Usage
   python experiments/run_benchmark.py status --stages screening
   python experiments/run_benchmark.py estimate --stages screening
   python experiments/run_benchmark.py select --stages tune_base
+  python experiments/run_benchmark.py verify --stages pilot          # re-validate artifacts and cross-run consistency
 
 ``run`` resumes by default: complete runs are skipped, failed runs are
 reported and not retried unless asked. After a tuning stage completes, its
@@ -47,7 +48,7 @@ def selections_for(bench: dict, stage: str) -> None:
 
 def main() -> None:
     parser = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
-    parser.add_argument("command", choices=["run", "status", "estimate", "select", "worker", "manifest"])
+    parser.add_argument("command", choices=["run", "status", "estimate", "select", "worker", "manifest", "verify"])
     parser.add_argument("--bench", default="benchmark.yaml", help="benchmark config in configs/ (or a path)")
     parser.add_argument("--stages", nargs="*", default=[])
     parser.add_argument("--only", help="run only specs whose key contains this text")
@@ -67,6 +68,7 @@ def main() -> None:
     bench = P.load_benchmark(args.bench)
     deadline = time.time() + args.max_hours * 3600 if args.max_hours else None
     timeout = args.timeout_hours * 3600 if args.timeout_hours else None
+    verify_failed = False
     for stage in args.stages:
         if args.command == "run":
             summary = O.run_stage(bench, stage, only=args.only, retry_failed=args.retry_failed, jobs=args.jobs,
@@ -86,6 +88,14 @@ def main() -> None:
             selections_for(bench, stage)
         elif args.command == "manifest":
             print(O.write_manifest(bench, stage))
+        elif args.command == "verify":
+            rep = O.verify_stage(bench, stage)
+            print(f"verify {stage}: {rep['complete_runs']} complete run(s), {len(rep['not_complete'])} not complete, "
+                  f"commits {[c[:8] for c in rep['commits']]}, all_official={rep['all_official']}, "
+                  f"{'OK' if rep['ok'] else 'PROBLEMS'}")
+            for p in rep["problems"]:
+                print("  PROBLEM", p)
+            verify_failed = verify_failed or not rep["ok"]
         elif args.command in ("status", "estimate"):
             try:
                 specs = P.plan_stage(bench, stage)
@@ -105,6 +115,9 @@ def main() -> None:
                 elif state != "complete":
                     print(f"  {state:10s} {spec['key']}")
             print(f"stage {stage}: {counts}")
+
+    if verify_failed:
+        raise SystemExit(1)
 
 
 if __name__ == "__main__":

@@ -64,3 +64,28 @@ def test_selection_is_never_overwritten(tmp_path):
     O._write_selection(path, {"lr": 0.1, "selected_utc": "b"})       # identical content: fine
     with pytest.raises(RuntimeError, match="never overwritten"):
         O._write_selection(path, {"lr": 0.3, "selected_utc": "c"})
+
+
+def test_pilot_and_base_tuning_specs_do_not_depend_on_later_selections(bench):
+    """A pilot planned before tuning must equal the same pilot planned after it,
+    otherwise completed pilot runs would fail validation (config drift)."""
+    before = {s["key"]: s["config_hash"] for st in ("pilot", "tune_base") for s in P.plan_stage(bench, st)}
+    O._write_selection(P.selection_path(bench, "base", "amazon_vg"),
+                       {"regime": "amazon_vg", "lr": 0.3, "weight_decay": 1e-5, "selected_utc": "x"})
+    after = {s["key"]: s["config_hash"] for st in ("pilot", "tune_base") for s in P.plan_stage(bench, st)}
+    assert before == after
+    tuned = P.regime_config(bench, "amazon_vg")                     # evaluation stages DO use it
+    assert tuned["fl"]["lr"] == 0.3 and tuned["benchmark"]["base_tuning"]["source"] == "tune_base"
+
+
+def test_verify_detects_partition_mismatch_and_passes_clean_runs(bench):
+    O.run_stage(bench, "pilot", only="amazon_vg/fedavg/")
+    O.run_stage(bench, "pilot", only="amazon_vg/fedadam/")
+    assert O.verify_stage(bench, "pilot")["ok"]
+    spec = [s for s in P.plan_stage(bench, "pilot") if "amazon_vg/fedadam/" in s["key"]][0]
+    meta_path = Path(spec["run_dir"]) / "run_metadata.json"
+    meta = json.loads(meta_path.read_text())
+    meta["partition"]["sha256"] = "0" * 64
+    meta_path.write_text(json.dumps(meta))
+    report = O.verify_stage(bench, "pilot")
+    assert not report["ok"] and any("different partitions" in p for p in report["problems"])

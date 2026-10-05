@@ -3,6 +3,30 @@
 Protocol and code changes that can affect results. Each entry states whether
 results had been seen when the change was made.
 
+## 2026-10-06 (provenance: diagnostics validation, verify command, stable pilot specs, safe restore; no scientific result existed)
+
+* Planning bug found by the new `verify` command (local smoke results only):
+  pilot and base-tuning specs fell back to placeholders only while no
+  `tune_base` selection existed, so re-planning them after tuning changed
+  their config hash and completed pilots no longer matched their spec. They
+  now never read selections (`regime_config(untuned=True)`). Evaluation
+  stages still require the selection. The 24 pilot/tune_base specs of
+  `configs/benchmark.yaml` hash identically to commit a3b07c5, so the
+  completed Kaggle pilot runs stay valid.
+* `experiments/client_diagnostics.py`: the descriptor table is checked
+  against the bundle (seen/unseen client counts and row totals, class counts,
+  raw-text measures present) and `DIAG_COMPLETE` is written only if every
+  check passes; an unvalidated table is recomputed, never reused. Laptop
+  check (SYNTHETIC, 6,000 clients, 420,814 reviews): 18 s, peak RSS 398 MB.
+* `run_benchmark.py verify`: re-validates every complete run and checks one
+  bundle/vocabulary per regime, one partition per regime (natural) or per seed
+  (synthetic), and that validated diagnostics use the same partition.
+* Kaggle kernel restore merges several attached outputs without loss: status
+  attempts are unioned by start time, differing logs are both kept, identical
+  files skipped; a differing immutable artifact or bundle aborts the job
+  before anything runs. The kernel runs `verify` at the end.
+* No threshold, algorithm, dataset, partition or frozen config changed.
+
 ## 2026-10-06 (pilot analysis no longer labelled as screening evidence)
 
 * `analyze_stage` applied the screening rules to every stage, so the Job 1

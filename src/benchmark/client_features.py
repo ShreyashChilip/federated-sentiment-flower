@@ -165,6 +165,35 @@ def _add_raw_text_measures(rows: list[dict], b, store_path: Path, definition: st
             row["unique_users_share"] = len(users) / max(len(texts), 1)
 
 
+def validate(rows: list[dict], rt, raw_text: bool) -> list[str]:
+    """Hard consistency checks of a descriptor table against the bundle; empty = valid."""
+    b = rt.bundle
+    problems = []
+    seen = [r for r in rows if r["population"] == "seen"]
+    unseen = [r for r in rows if r["population"] == "unseen"]
+    train_rows = sum(len(rt.client_rows(k, "train")) for k in range(rt.num_clients))
+    with_train = sum(1 for k in range(rt.num_clients) if len(rt.client_rows(k, "train")))
+    if len(seen) != with_train:
+        problems.append(f"{len(seen)} seen rows, {with_train} seen clients with training data")
+    if sum(r["n"] for r in seen) != train_rows:
+        problems.append("seen-client row counts do not add up to the TRAIN rows of the partition")
+    if b.kind == "natural":
+        from src.data.natural import UNSEEN
+
+        expected = b.meta["holdout"]["unseen_clients"]
+        if len(unseen) != expected:
+            problems.append(f"{len(unseen)} unseen rows, bundle has {expected} unseen clients")
+        if sum(r["n"] for r in unseen) != int((np.asarray(b.roles) == UNSEEN).sum()):
+            problems.append("unseen-client row counts do not add up to the unseen records")
+        if raw_text and any(r.get("oov_token_rate") is None for r in rows if r["client_code"] is not None):
+            problems.append("raw-text measures missing for some clients")
+    for r in rows:
+        if sum(r[f"class_{k}"] for k in range(b.num_classes)) != r["n"]:
+            problems.append(f"class counts do not add up for {r['population']} client {r['client_index']}")
+            break
+    return problems
+
+
 def write(rows: list[dict], out_dir: Path, meta: dict) -> Path:
     out_dir.mkdir(parents=True, exist_ok=True)
     fields = FIELDS_BASE + sorted({k for r in rows for k in r if k.startswith("class_")}) + \
