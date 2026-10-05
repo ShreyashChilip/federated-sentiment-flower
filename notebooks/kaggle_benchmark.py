@@ -88,12 +88,13 @@ def main() -> None:
     (OUT_RESULTS / f"kaggle_environment_{int(T0)}.json").write_text(env_report.stdout)
     print(env_report.stdout, flush=True)
 
+    # Model-free diagnostics first: they need the review store built in this session.
+    for regime, seed in JOB["diagnostics"]:
+        sh(sys.executable, "experiments/client_diagnostics.py", "--regimes", regime, "--seeds", seed, check=False)
     remaining = JOB["max_hours"] - (time.time() - T0) / 3600
     if JOB["stages"]:
         sh(sys.executable, "experiments/run_benchmark.py", "run", "--stages", *JOB["stages"],
            "--max-hours", f"{max(remaining, 0.1):.2f}", *JOB["extra_args"], check=False)
-    for regime, seed in JOB["diagnostics"]:
-        sh(sys.executable, "experiments/client_diagnostics.py", "--regimes", regime, "--seeds", seed, check=False)
     for stage in JOB["analyze"]:
         sh(sys.executable, "experiments/analyze_benchmark.py", "--stages", stage, check=False)
     for stage in JOB["stages"]:
