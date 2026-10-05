@@ -12,7 +12,9 @@ that commit. Requires the Kaggle CLI and credentials for --push / --status /
 from __future__ import annotations
 
 import argparse
+import ast
 import json
+import pprint
 import re
 import subprocess
 import sys
@@ -49,10 +51,10 @@ def main() -> None:
     if not user:
         user = input_user()
     job = {"repo": git("remote", "get-url", "origin"), "commit": commit, "stages": args.stages,
-           "max_hours": args.max_hours, "diagnostics": [d.split(":") for d in args.diagnostics],
+           "max_hours": args.max_hours,
+           "diagnostics": [[d.split(":")[0], int(d.split(":")[1])] for d in args.diagnostics],
            "analyze": args.analyze, "keep_bundles": True, "extra_args": args.extra, "slug": args.slug}
-    src = (ROOT / "notebooks" / "kaggle_benchmark.py").read_text(encoding="utf-8")
-    src = re.sub(r"JOB = \{.*?\n\}\n", "JOB = " + json.dumps(job, indent=4) + "\n", src, count=1, flags=re.S)
+    src = render_script(job)
     out = args.out / args.slug
     out.mkdir(parents=True, exist_ok=True)
     (out / "kaggle_benchmark.py").write_text(src, encoding="utf-8")
@@ -65,6 +67,27 @@ def main() -> None:
     print(f"prepared {out} for commit {commit[:10]}")
     if args.push:
         subprocess.run(["kaggle", "kernels", "push", "-p", str(out)], check=True)
+
+
+def render_script(job: dict) -> str:
+    """The kernel source with its JOB block replaced by ``job`` as a PYTHON literal.
+
+    pprint (not json.dumps): the block is Python code, so booleans and None
+    must be True/False/None. The generated source is parsed and its JOB value
+    read back and compared with ``job``, so a malformed script is never written.
+    """
+    template = (ROOT / "notebooks" / "kaggle_benchmark.py").read_text(encoding="utf-8")
+    block = "JOB = " + pprint.pformat(job, indent=4, width=100, sort_dicts=False) + "\n"
+    src, count = re.subn(r"JOB = \{.*?\n\}\n", lambda _: block, template, count=1, flags=re.S)
+    if count != 1:
+        raise RuntimeError("JOB block not found in notebooks/kaggle_benchmark.py")
+    tree = ast.parse(src, "kaggle_benchmark.py")
+    compile(tree, "kaggle_benchmark.py", "exec")
+    value = next(n.value for n in tree.body if isinstance(n, ast.Assign)
+                 and isinstance(n.targets[0], ast.Name) and n.targets[0].id == "JOB")
+    if ast.literal_eval(value) != job:
+        raise RuntimeError("the JOB literal in the generated script does not round-trip")
+    return src
 
 
 def input_user() -> str:

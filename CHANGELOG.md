@@ -3,6 +3,16 @@
 Protocol and code changes that can affect results. Each entry states whether
 results had been seen when the change was made.
 
+## 2026-10-05 (Kaggle job generator fix; no experiment had run)
+
+* Job 1 stopped on Kaggle before any run with `NameError: name 'true' is not
+  defined`: `tools/kaggle_job.py` wrote the JOB block of the Python kernel
+  with `json.dumps`, which emits JSON literals. It now writes a Python literal
+  (`pprint`), parses and compiles the generated script and checks that the
+  embedded JOB equals the intended one before writing it. Diagnostic seeds
+  are written as integers. Regression test: `tests/test_kaggle_job.py`. No
+  experimental code or protocol changed.
+
 ## 2026-10-05 (screening threshold units clarified; no benchmark run had been made)
 
 * `docs/BENCHMARK_PROTOCOL.md` section 6 and `src/benchmark/screening.py` both
