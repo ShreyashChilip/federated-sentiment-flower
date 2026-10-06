@@ -89,7 +89,12 @@ def main() -> None:
         elif args.command == "manifest":
             print(O.write_manifest(bench, stage))
         elif args.command == "verify":
-            rep = O.verify_stage(bench, stage)
+            try:
+                rep = O.verify_stage(bench, stage)
+            except P.MissingSelection as exc:
+                # Not an artifact problem: the stage depends on a selection that does not exist yet.
+                print(f"verify {stage}: NOT PLANNABLE YET, nothing to verify ({exc})")
+                continue
             print(f"verify {stage}: {rep['complete_runs']} complete run(s), {len(rep['not_complete'])} not complete, "
                   f"commits {[c[:8] for c in rep['commits']]}, all_official={rep['all_official']}, "
                   f"{'OK' if rep['ok'] else 'PROBLEMS'}")

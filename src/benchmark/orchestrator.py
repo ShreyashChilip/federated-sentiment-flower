@@ -215,6 +215,8 @@ def run_stage(bench: dict, stage: str, *, only: str | None = None, retry_failed:
         ok, report = resources.check(spec, jobs=jobs, **_client_facts(spec))
         est = report["estimate"]
         msg = f"est RSS {est['rss_gb']:.1f} GB, scratch {est['scratch_disk_gb']:.1f} GB" if est["known"] else est["reason"]
+        for warning in report.get("warnings", []):
+            print(f"  WARNING {spec['key']}: {warning}", flush=True)
         if not ok and not force:
             print(f"  REFUSED {spec['key']}: " + "; ".join(report["problems"]), flush=True)
             summary["refused"] += 1

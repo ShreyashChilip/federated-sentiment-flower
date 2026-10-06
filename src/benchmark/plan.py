@@ -93,6 +93,17 @@ def _variant(point: dict) -> str:
     return "_".join(f"{k}{v:g}" for k, v in sorted(point.items()))
 
 
+def evaluation_seeds(bench: dict) -> set[int]:
+    """Seeds of reported runs: every regime's official seeds and every evaluation stage's seeds."""
+    seeds = set()
+    for spec in bench["regimes"].values():
+        seeds |= {int(x) for x in load_config(spec["config"])["experiment"].get("seeds") or []}
+    for st in bench["stages"].values():
+        if st["kind"] == "evaluate":
+            seeds |= {int(x) for x in st.get("seeds", [])}
+    return seeds
+
+
 def plan_stage(bench: dict, stage: str) -> list[dict]:
     st = bench["stages"][stage]
     kind = st["kind"]
@@ -106,6 +117,10 @@ def plan_stage(bench: dict, stage: str) -> list[dict]:
                     specs.append(_spec(bench, stage, regime, method, seed, c))
         return specs
     seed_t = int(bench["tuning_seed"])
+    reserved = evaluation_seeds(bench)
+    if seed_t in reserved:
+        raise ValueError(f"tuning seed {seed_t} is also an evaluation seed {sorted(reserved)}; "
+                         "tuning must use a seed that no reported run uses")
     if kind == "tune_base":
         for regime in st["regimes"]:
             cfg = regime_config(bench, regime, untuned=True)

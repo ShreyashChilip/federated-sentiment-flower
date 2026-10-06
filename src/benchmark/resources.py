@@ -13,9 +13,15 @@ Memory model (resident set of the worker process):
   * one evaluation chunk of the sparse matrix (+ copies) and its logits
   * the largest client's training rows (batches are views; one copy budgeted)
   * centralized: index array over all training rows
-The memory-mapped feature matrix is file-backed page cache (reclaimable) and
-reported separately; it is not counted as resident memory.
-Scratch disk: SCAFFOLD keeps one float32 model-sized row per client.
+  * the memory-mapped feature matrix: evaluation reads rows spread over the
+    whole file, so its pages become resident in the process (file-backed and
+    reclaimable, but counted by RSS and by the container); counted in full.
+    Kaggle Amazon pilot (Job 2): measured 2.9 GB peak, estimate ~3.4 GB.
+Scratch disk: SCAFFOLD keeps one float32 model-sized row per client in a
+file written with plain I/O (not mapped), so it is NOT in the process RSS;
+the written rows sit in the kernel page cache (reclaimable). That amount is
+reported as ``state_page_cache_gb`` and enters the worst-case container
+figure, which is checked against physical memory as a warning only.
 """
 from __future__ import annotations
 
@@ -71,11 +77,13 @@ def estimate(spec: dict, num_clients: int | None = None, max_client_rows: int | 
         rss += max_client_rows * avg_nnz * 12
     if spec["kind"] == "centralized":
         rss += stats["rows"] * 16
+    rss += stats["matrix_bytes"]
     scratch = 0
     if spec["kind"] == "federated" and cfg["fl"].get("algorithm") == "scaffold":
         scratch = (num_clients or 0) * model_bytes
     return {"known": True, "rss_gb": rss / 2**30, "scratch_disk_gb": scratch / 2**30,
-            "mapped_matrix_gb": stats["matrix_bytes"] / 2**30, "params": p, "bundle": stats}
+            "mapped_matrix_gb": stats["matrix_bytes"] / 2**30, "state_page_cache_gb": scratch / 2**30,
+            "worst_case_container_gb": (rss + scratch) / 2**30, "params": p, "bundle": stats}
 
 
 def budget() -> dict:
@@ -106,4 +114,8 @@ def check(spec: dict, jobs: int = 1, **kw) -> tuple[bool, dict]:
         problems.append(f"SCAFFOLD client state needs up to {est['scratch_disk_gb']:.1f} GB; "
                         f"{b['scratch_free_gb']:.1f} GB free in {b['scratch_dir']}")
     report["problems"] = problems
+    # Page cache is reclaimable, so exceeding physical memory here is a warning, not a refusal.
+    if est["worst_case_container_gb"] * jobs > b["physical_gb"]:
+        report["warnings"] = [f"RSS + SCAFFOLD state page cache {est['worst_case_container_gb']:.1f} GB x {jobs} "
+                              f"exceeds physical memory {b['physical_gb']:.1f} GB (cache is reclaimable)"]
     return not problems, report

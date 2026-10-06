@@ -3,6 +3,35 @@
 Protocol and code changes that can affect results. Each entry states whether
 results had been seen when the change was made.
 
+## 2026-10-06 (engineering fixes before Job 3; no tuning or screening result existed)
+
+Approved before Job 3. Job 2 (commit 55f8104, Kaggle) completed the pilot
+stage: 15/15 runs, `verify pilot` OK, Amazon diagnostics validated.
+
+* SCAFFOLD client state (`src/benchmark/state_store.py`) is written and read
+  with plain file I/O instead of a memory map. Job 2's Amazon SCAFFOLD pilot
+  peaked at 8.75 GB RSS after 3 rounds: mapped rows that had been written
+  stayed resident (measured 1:1 with the written state; ~21.7 GB projected for
+  21,694 clients at 50 rounds, on a 31.35 GB machine). Now the process grows by
+  ~5 MB for 2.8 GB of state. File layout unchanged (row cid, float32, at byte
+  cid x width x 4). Bit-identical results: a SCAFFOLD run on the SYNTHETIC
+  4,800-client population gives the same final-weights hash (c6b900b9...),
+  clients with state and c_global norm as the memory-mapped store; the Flower
+  equivalence test for SCAFFOLD still passes. Regression tests: file layout,
+  and process growth while writing ~190 MB of state (fails on the old store).
+* Resource estimator: the memory-mapped feature matrix is counted as resident
+  (evaluation touches rows across the whole file). Amazon pilot: estimate
+  ~3.4 GB vs 2.9 GB measured (was 1.1 GB). SCAFFOLD state is reported as
+  reclaimable page cache and enters a worst-case figure that only warns.
+* Planner refuses a tuning seed that is also an evaluation seed (each regime's
+  official seeds and every evaluation stage's seeds). Seed 7 and the official
+  seeds are unchanged.
+* `run_benchmark.py verify` reports a stage that cannot be planned yet
+  (missing selection) without a traceback and without failing.
+* Unchanged, checked: `docs/BENCHMARK_PROTOCOL.md`, every config; all 171
+  planned runs of pilot / tune_base / tune_algorithms / screening have
+  identical keys and config hashes before and after this change.
+
 ## 2026-10-06 (provenance: diagnostics validation, verify command, stable pilot specs, safe restore; no scientific result existed)
 
 * Planning bug found by the new `verify` command (local smoke results only):

@@ -140,3 +140,40 @@ def test_vectorized_client_scores_match_the_reference():
             continue
         ref = metrics_from_confusion(cms[k])
         assert np.isclose(scores["macro_f1"][k], ref["macro_f1"]) and np.isclose(scores["accuracy"][k], ref["accuracy"])
+
+
+def test_client_state_file_layout_is_fixed(tmp_path):
+    """Row cid = the client's arrays flattened in order, float32, at byte cid * width * 4."""
+    shapes = [(2, 3), (2,)]
+    store = ClientStateStore(tmp_path / "s.f32", 4, shapes)
+    rows = {1: [np.arange(6, dtype=np.float32).reshape(2, 3), np.array([6, 7], np.float32)],
+            3: [np.full((2, 3), -1.5, np.float32), np.array([0.25, 9], np.float32)]}
+    for cid, arrays in rows.items():
+        store.put(cid, arrays)
+    raw = np.fromfile(tmp_path / "s.f32", dtype=np.float32).reshape(4, 8)
+    assert (raw[0] == 0).all() and (raw[2] == 0).all()
+    for cid, arrays in rows.items():
+        assert np.array_equal(raw[cid], np.concatenate([a.ravel() for a in arrays]))
+        assert all(np.array_equal(a, b) for a, b in zip(store.get(cid), arrays))
+    store.put(1, rows[3])                                    # overwrite in place
+    assert np.array_equal(np.fromfile(tmp_path / "s.f32", dtype=np.float32).reshape(4, 8)[1], raw[3])
+    store.close()
+
+
+def test_client_state_is_not_held_in_process_memory(tmp_path):
+    """Regression (Job 2, SCAFFOLD on Amazon): a memory-mapped store kept every
+    written row resident (peak 8.75 GB after 3 rounds). 200 rows at Amazon width
+    (~200 MB) must not grow the process by more than a few rows."""
+    import psutil
+
+    shapes = [(5, 50_000), (5,)]
+    proc = psutil.Process()
+    store = ClientStateStore(tmp_path / "s.f32", 200, shapes)
+    base = proc.memory_info().rss
+    rng = np.random.default_rng(0)
+    for cid in range(200):
+        store.put(cid, [rng.standard_normal(s).astype(np.float32) for s in shapes])
+        store.get(cid)
+    growth_mb = (proc.memory_info().rss - base) / 2**20
+    store.close()
+    assert growth_mb < 60, f"process grew by {growth_mb:.0f} MB while writing ~190 MB of client state"

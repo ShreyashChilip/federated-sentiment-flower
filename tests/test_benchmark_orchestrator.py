@@ -89,3 +89,35 @@ def test_verify_detects_partition_mismatch_and_passes_clean_runs(bench):
     meta_path.write_text(json.dumps(meta))
     report = O.verify_stage(bench, "pilot")
     assert not report["ok"] and any("different partitions" in p for p in report["problems"])
+
+
+def test_tuning_seed_must_not_be_an_evaluation_seed(bench):
+    assert bench["tuning_seed"] not in P.evaluation_seeds(bench)
+    assert len(P.plan_stage(bench, "tune_base")) > 0                    # seed 7 is accepted
+    for clash in (42, 271828):                                          # official / screening seeds
+        bad = deep_merge(bench, {"tuning_seed": clash})
+        for stage in ("tune_base", "tune_algorithms"):
+            with pytest.raises(ValueError, match="evaluation seed"):
+                P.plan_stage(bad, stage)
+
+
+def test_real_benchmark_config_keeps_seed_7_and_the_official_seeds():
+    b = P.load_benchmark("benchmark.yaml")
+    assert b["tuning_seed"] == 7
+    assert P.evaluation_seeds(b) == {42, 123, 456, 789, 1001, 2024, 31415, 271828}
+    assert b["stages"]["screening"]["seeds"] == [42, 123, 456]
+
+
+def test_verify_reports_an_unplannable_stage_without_a_traceback(tmp_path):
+    import subprocess
+    import sys
+
+    root = Path(__file__).resolve().parents[1]
+    cfg = tmp_path / "bench.yaml"
+    cfg.write_text(f"inherits: {(root / 'configs' / 'smoke_bench' / 'benchmark.yaml').as_posix()}\n"
+                   f"benchmark:\n  results_dir: {(tmp_path / 'r').as_posix()}\n")
+    out = subprocess.run([sys.executable, str(root / "experiments" / "run_benchmark.py"), "verify", "--bench", str(cfg),
+                          "--stages", "tune_algorithms", "screening"], capture_output=True, text=True, cwd=root)
+    assert out.returncode == 0, out.stderr
+    assert "Traceback" not in out.stdout + out.stderr
+    assert out.stdout.count("NOT PLANNABLE YET") == 2
