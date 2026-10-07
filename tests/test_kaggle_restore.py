@@ -126,3 +126,34 @@ def test_code_commit_pin_requires_identical_experiment_code():
         tool.check_code_commit("10f519b", head)
     # the experiment code of 3415496 (Job 3a) is unchanged at HEAD
     assert tool.check_code_commit("3415496", head).startswith("3415496")
+
+
+def natural_summary(seed: int, sha: str = "a" * 64, clients: int = 3) -> str:
+    return json.dumps({"name": "amazon_natural", "params": {"scheme": "natural", "num_clients": None},
+                       "experiment_seed": seed, "partition_seed": 1000 + seed, "sha256": sha,
+                       "num_clients": clients, "clients": [{"client_id": i} for i in range(clients)]})
+
+
+def test_natural_partition_created_under_different_seeds_is_not_a_conflict(tmp_path):
+    """Job 3b restore (2026-10-07): Job 2 created the Amazon partition with seed 42,
+    Job 3a re-created the identical partition with seed 7; only the recorded seed differs."""
+    k = load_kernel(tmp_path)
+    inp = tmp_path / "input"
+    write(inp / "job2" / "partitions" / "amazon_natural.json", natural_summary(42))
+    write(inp / "job3a" / "partitions" / "amazon_natural.json", natural_summary(7))
+    write(inp / "job2" / "partitions" / "amazon_natural.npz", "same bytes")
+    write(inp / "job3a" / "partitions" / "amazon_natural.npz", "same bytes")
+    k.restore(inp, tmp_path / "unz")
+    kept = json.loads((k.OUT_PARTITIONS / "amazon_natural.json").read_text())
+    assert kept["experiment_seed"] == 42                                   # first one kept
+    assert (k.OUT_PARTITIONS / "amazon_natural.json.from-job3a").exists()  # the other preserved
+
+
+@pytest.mark.parametrize("other", [natural_summary(7, sha="b" * 64), natural_summary(7, clients=4)])
+def test_partition_summaries_with_real_differences_still_conflict(tmp_path, other):
+    k = load_kernel(tmp_path)
+    inp = tmp_path / "input"
+    write(inp / "job2" / "partitions" / "amazon_natural.json", natural_summary(42))
+    write(inp / "job3a" / "partitions" / "amazon_natural.json", other)
+    with pytest.raises(SystemExit, match="conflicting"):
+        k.restore(inp, tmp_path / "unz")

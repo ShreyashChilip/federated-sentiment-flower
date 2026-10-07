@@ -3,6 +3,30 @@
 Protocol and code changes that can affect results. Each entry states whether
 results had been seen when the change was made.
 
+## 2026-10-07 (Job 3b first attempt stopped by the restore guard; nothing ran)
+
+* The first Job 3b session (experiments 3415496, wrapper 5178cb3) stopped in
+  restore, before any run: the Amazon partition summary differed between the
+  Job 2 and Job 3a outputs. Cause: the partition indices are byte-identical
+  (same .npz, sha256 2d803e8c...), but the summary records the seed of the run
+  that created it (Job 2: 42; Job 3a: 7). A natural-client partition does not
+  depend on the seed.
+* Root cause of the re-creation: Kaggle mounts notebook outputs at
+  /kaggle/input/notebooks/<owner>/<slug>/ (three levels); the Job 3a wrapper
+  searched two levels, so Job 3a restored nothing and rebuilt both feature
+  bundles and the Amazon partition (its first run took 70 min instead of ~31).
+  The rebuilt bundles are identical to Job 2's on every recorded fingerprint
+  (source sha256, vocabulary sha256, train/test fingerprints, role counts,
+  fit documents) for Amazon and Yelp, so Job 3a results stand.
+* Wrapper fix: two partition summaries that are both natural-scheme, have the
+  same sha256 and differ only in `experiment_seed`/`partition_seed` are not a
+  conflict; the first is kept, the other saved as `*.from-<origin>`. Any other
+  difference still aborts. Offline replay with the real Job 2 and 3a archives
+  in Kaggle's layout: restore succeeds, preflight finds 9 + 33 completed runs.
+  Amazon tuning runs of 3b will record the Job 2 creating seed in
+  `partition.partition_seed`; for a natural partition that field is unused.
+* Experiment code unchanged since 3415496.
+
 ## 2026-10-07 (Kaggle wrapper: dataset inputs, preflight guard, pinned experiment commit; tuning in progress)
 
 Job 3a (commit 3415496): tune_base 9/9 complete, Amazon selection lr = 0.3,

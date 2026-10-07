@@ -123,8 +123,28 @@ def merge_tree(src: Path, dest: Path, origin: str, conflicts: list) -> None:
             print(f"kept both logs: {rel} and {alt.name}", flush=True)
         elif rel.name in ("manifest.json", "verification.json") or "analysis" in rel.parts:
             continue
+        elif rel.suffix == ".json" and _same_natural_partition(target, f):
+            alt = target.with_name(f"{target.name}.from-{origin}")
+            shutil.copy2(f, alt)
+            print(f"same natural partition, different creating seed: kept {rel}, saved {alt.name}", flush=True)
         else:
             conflicts.append(f"{origin}: {rel}")
+
+
+# A natural-client partition does not depend on the seed, but its summary records
+# the seed of the run that happened to create it. Only these fields may differ.
+SEED_ONLY_FIELDS = ("experiment_seed", "partition_seed")
+
+
+def _same_natural_partition(a: Path, b: Path) -> bool:
+    try:
+        x, y = json.loads(a.read_text()), json.loads(b.read_text())
+    except (ValueError, OSError):
+        return False
+    if not all(isinstance(d, dict) and d.get("params", {}).get("scheme") == "natural" and d.get("sha256") for d in (x, y)):
+        return False
+    strip = lambda d: {k: v for k, v in d.items() if k not in SEED_ONLY_FIELDS}
+    return x["sha256"] == y["sha256"] and strip(x) == strip(y)
 
 
 def restore(inputs: Path = Path("/kaggle/input"), unzip_dir: Path = Path("/tmp/fedbench_restore")) -> None:
