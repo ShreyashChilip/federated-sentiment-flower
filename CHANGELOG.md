@@ -8,7 +8,7 @@ results had been seen when the change was made.
 * Tuning complete on Kaggle, experiments at 3415496: tune_base 9/9,
   tune_algorithms 66/66, `verify` OK for both, all official. Selections
   (validation macro-F1, seed 7) as printed by the final session; the selection
-  files are to be checked locally from that session's archive:
+  files were verified locally from that session's archive (EXPERIMENT_LOG, 2026-10-08):
   - yelp_iid: FedProx mu 0.001 (edge); FedAdam server lr 1.0 (edge);
     FedAdagrad 1.0 (edge); FedYogi 0.3.
   - yelp_dir01: FedProx mu 0.01; FedAdam 0.1; FedAdagrad 1.0 (edge); FedYogi 0.1.

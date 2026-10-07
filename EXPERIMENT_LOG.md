@@ -100,3 +100,17 @@ No number from these checks may be reported.
   (same Amazon partition, different recorded creating seed); fixed in the
   wrapper, nothing ran.
 * Decision before screening: run screening as frozen (option A).
+
+## 2026-10-08 - Tuning archive verified locally (final session, fedbench_results_fedbench-job3-resume.zip)
+
+* `run_benchmark.py verify` on the archive: pilot 15/15 (55f81041), tune_base
+  9/9 and tune_algorithms 66/66 (3415496e), all official, no problems.
+  Screening plans to 81 pending runs from the restored selections.
+* Every selection file was recomputed independently from the per-run
+  `final.json` with the frozen rules (base: highest validation macro-F1, ties
+  to smaller lr then larger wd; algorithms: ties to the smaller value) and
+  matches both the file and the values printed in the Kaggle log (base:
+  lr 0.3, wd 1e-6; 21 algorithm selections). Targets (0.95 x tuned FedAvg
+  validation macro-F1): yelp_iid 0.8558, yelp_dir01 0.7106, amazon_vg 0.1666.
+* Leakage check: 0 of 75 tuning runs contain client-test, unseen-client or
+  test metrics; every tuning run used seed 7.
