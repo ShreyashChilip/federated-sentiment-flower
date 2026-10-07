@@ -88,3 +88,15 @@ No number from these checks may be reported.
   is discarded; fixed so non-screening stages report `not_applicable`.
 * OOM check (commit a3b07c5): `pilot/amazon_vg/fedavg/seed0` complete in
   2231 s, no OOM. Fix promoted to `fedbench`.
+
+## 2026-10-06/08 - Benchmark fedbench_v1: tuning (Jobs 3a, 3b, 3c; validation only)
+
+* Experiments at 3415496 in all three sessions; tune_base 9/9 and
+  tune_algorithms 66/66 complete, `verify` OK, all official. Selections and the
+  Amazon budget observation: see `CHANGELOG.md` (2026-10-08).
+* Job 3a did not restore the Job 2 output (input mounted one level deeper than
+  the old wrapper searched) and rebuilt both bundles; the rebuilds match Job 2
+  on every recorded fingerprint. Job 3b's first attempt stopped in restore
+  (same Amazon partition, different recorded creating seed); fixed in the
+  wrapper, nothing ran.
+* Decision before screening: run screening as frozen (option A).

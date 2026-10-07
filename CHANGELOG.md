@@ -3,6 +3,36 @@
 Protocol and code changes that can affect results. Each entry states whether
 results had been seen when the change was made.
 
+## 2026-10-08 (tuning complete; decision before screening: run screening as frozen; no screening result existed)
+
+* Tuning complete on Kaggle, experiments at 3415496: tune_base 9/9,
+  tune_algorithms 66/66, `verify` OK for both, all official. Selections
+  (validation macro-F1, seed 7) as printed by the final session; the selection
+  files are to be checked locally from that session's archive:
+  - yelp_iid: FedProx mu 0.001 (edge); FedAdam server lr 1.0 (edge);
+    FedAdagrad 1.0 (edge); FedYogi 0.3.
+  - yelp_dir01: FedProx mu 0.01; FedAdam 0.1; FedAdagrad 1.0 (edge); FedYogi 0.1.
+  - amazon_vg: base lr 0.3, wd 1e-6 (both edge); FedProx mu 0.001 (edge);
+    FedAdam, FedAdagrad, FedYogi server lr 1.0 (edge).
+  Edge selections are recorded and frozen; no grid is extended (protocol section 3).
+* Determinism across Kaggle sessions: the tune_base winner (lr 0.3, wd 1e-6)
+  and the separately run tune_algorithms FedAvg reference have identical
+  final weights (sha256 d83ab0edceb3...).
+* Tuning-stage observation (validation data only), recorded before screening:
+  on amazon_vg, FedAvg, FedProx, FedNova and SCAFFOLD stay at or near the
+  majority-class solution within the frozen 50-round budget (they predict
+  5 stars for ~99% of validation reviews; validation macro-F1 0.153-0.183 vs
+  0.153 for majority-only; curves flat until ~round 30). FedAdam/FedAdagrad/
+  FedYogi (server lr 1.0) reach 0.56-0.58. Likely cause: few local SGD steps
+  per small natural client per round (~120 training reviews, batch 32),
+  i.e. a step-budget effect rather than evidence about heterogeneity. Not a
+  research-gap claim.
+* Decision (author, 2026-10-08): run screening exactly as frozen (option A).
+  No exploratory budget study is added before screening. Screening
+  interpretation must state that the Amazon FedAvg-family results are
+  budget-limited; the protocol's Phase B (local epochs E in {1, 3},
+  participation) is where this is examined.
+
 ## 2026-10-07 (Job 3b first attempt stopped by the restore guard; nothing ran)
 
 * The first Job 3b session (experiments 3415496, wrapper 5178cb3) stopped in
