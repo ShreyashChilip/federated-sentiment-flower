@@ -40,6 +40,11 @@ def main() -> None:
     ap.add_argument("--verify", nargs="*", default=[], help="stages to re-validate at the end of the job")
     ap.add_argument("--only", help="passed to run_benchmark.py run --only (single-run jobs)")
     ap.add_argument("--retry-failed", action="store_true", help="passed to run_benchmark.py run")
+    ap.add_argument("--expect", nargs="*", default=[], metavar="STAGE:N",
+                    help="abort unless at least N completed runs of STAGE are restored from the inputs")
+    ap.add_argument("--require-bundle", nargs="*", default=[], help="feature bundles that must be restored")
+    ap.add_argument("--code-commit", help="run the experiments from this earlier commit (resume a stage on one commit); "
+                    "allowed only if src/, configs/, experiments/ and requirements are identical at HEAD")
     ap.add_argument("--out", type=Path, default=ROOT / ".kaggle_jobs")
     ap.add_argument("--push", action="store_true")
     args = ap.parse_args()
@@ -50,6 +55,9 @@ def main() -> None:
     commit = git("rev-parse", "HEAD")
     if not git("branch", "-r", "--contains", commit):
         raise SystemExit(f"commit {commit[:10]} is not on the remote: push it first")
+    wrapper_commit = commit
+    if args.code_commit:
+        commit = check_code_commit(args.code_commit, wrapper_commit)
     user = args.user or json.loads(subprocess.run(["kaggle", "config", "view", "--json"], capture_output=True,
                                                   text=True).stdout or "{}").get("username")
     if not user:
@@ -57,7 +65,9 @@ def main() -> None:
     job = {"repo": git("remote", "get-url", "origin"), "commit": commit, "stages": args.stages,
            "max_hours": args.max_hours,
            "diagnostics": [[d.split(":")[0], int(d.split(":")[1])] for d in args.diagnostics],
-           "analyze": args.analyze, "keep_bundles": True, "extra_args": extra, "verify": args.verify, "slug": args.slug}
+           "analyze": args.analyze, "keep_bundles": True, "extra_args": extra, "verify": args.verify, "slug": args.slug,
+           "expect_complete": {e.split(":")[0]: int(e.split(":")[1]) for e in args.expect},
+           "require_bundles": list(args.require_bundle), "wrapper_commit": wrapper_commit}
     src = render_script(job)
     out = args.out / args.slug
     out.mkdir(parents=True, exist_ok=True)
@@ -68,9 +78,26 @@ def main() -> None:
             "kernel_sources": [s if "/" in s else f"{user}/{s}" for s in args.sources]}
     (out / "kernel-metadata.json").write_text(json.dumps(meta, indent=1), encoding="utf-8")
     (out / "job.json").write_text(json.dumps(job, indent=1), encoding="utf-8")
-    print(f"prepared {out} for commit {commit[:10]}")
+    print(f"prepared {out}: experiments at commit {commit[:10]}, wrapper from {wrapper_commit[:10]}")
     if args.push:
         subprocess.run(["kaggle", "kernels", "push", "-p", str(out)], check=True)
+
+
+# Paths whose content determines experiment results. A job may pin an earlier
+# commit for its experiments only if none of them changed since.
+EXPERIMENT_PATHS = ("src", "configs", "experiments", "requirements.txt", "requirements-kaggle.txt")
+
+
+def check_code_commit(code_commit: str, head: str) -> str:
+    full = git("rev-parse", "--verify", f"{code_commit}^{{commit}}")
+    if subprocess.run(["git", "merge-base", "--is-ancestor", full, head], cwd=ROOT).returncode != 0:
+        raise SystemExit(f"{code_commit} is not an ancestor of HEAD")
+    if not git("branch", "-r", "--contains", full):
+        raise SystemExit(f"{code_commit} is not on the remote")
+    changed = git("diff", "--name-only", full, head, "--", *EXPERIMENT_PATHS)
+    if changed:
+        raise SystemExit(f"experiment code changed since {full[:10]}; cannot run it under the old commit:\n{changed}")
+    return full
 
 
 def render_script(job: dict) -> str:

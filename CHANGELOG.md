@@ -3,6 +3,31 @@
 Protocol and code changes that can affect results. Each entry states whether
 results had been seen when the change was made.
 
+## 2026-10-07 (Kaggle wrapper: dataset inputs, preflight guard, pinned experiment commit; tuning in progress)
+
+Job 3a (commit 3415496): tune_base 9/9 complete, Amazon selection lr = 0.3,
+wd = 1e-6 (validation macro-F1 0.1753), both on the grid edge; recorded and
+frozen as-is (protocol: the grid is not extended). tune_algorithms 33/66
+complete (all of yelp_iid, 11 of yelp_dir01), no algorithm selection yet.
+`verify` OK for both stages. Job 3a used the same bundles, vocabularies and
+Amazon partition as Job 2 (checked from both archives).
+
+Wrapper/generator only; experiment code (`src/`, `configs/`, `experiments/`,
+requirements) unchanged since 3415496:
+
+* Restore finds result folders and bundles at any depth under /kaggle/input
+  (datasets mount deeper than notebook outputs) and extracts
+  `fedbench_results_*.zip` files that a dataset kept zipped. Previously such
+  inputs would not have been found and finished runs would have been redone.
+* Preflight: a job can require a minimum number of restored completed runs per
+  stage and named feature bundles; otherwise it stops before running anything.
+* `tools/kaggle_job.py --code-commit`: the experiments run from an earlier
+  commit while the wrapper is newer, allowed only if the experiment paths are
+  identical between the two commits. Lets Job 3b/3c finish tune_algorithms on
+  3415496, the commit of the Job 3a runs.
+* Job 3a timing (for planning): Amazon FedAvg tuning runs ~31 min each in
+  steady state (first run 70 min), Yelp runs ~9 min.
+
 ## 2026-10-06 (engineering fixes before Job 3; no tuning or screening result existed)
 
 Approved before Job 3. Job 2 (commit 55f8104, Kaggle) completed the pilot

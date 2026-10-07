@@ -65,3 +65,64 @@ def test_conflicting_run_artifact_or_bundle_aborts(tmp_path):
     write(inp2 / "oom" / "bundles" / "amazon2023_x" / "meta.json", '{"v": 2}')
     with pytest.raises(SystemExit, match="bundle amazon2023_x differs"):
         k2.restore(inp2)
+
+
+def make_job3a_output(root: Path, completed: int = 3) -> None:
+    for i in range(completed):
+        write(root / "results_benchmark" / f"tune_algorithms/yelp_iid/m{i}/seed7/COMPLETE", "{}")
+    write(root / "results_benchmark" / "tune_base/amazon_vg/selected.json", '{"lr": 0.3}')
+    write(root / "partitions" / "p.json", "{}")
+
+
+def test_dataset_nested_deeply_is_found(tmp_path):
+    """Kaggle may mount a dataset as /kaggle/input/datasets/<owner>/<slug>/<zip name>/..."""
+    k = load_kernel(tmp_path)
+    inp = tmp_path / "input"
+    make_job3a_output(inp / "datasets" / "owner" / "fedbench-results" / "fedbench_results_fedbench-job3")
+    write(inp / "notebooks" / "owner" / "fedbench-job2" / "bundles" / "amazon2023_x" / "meta.json", '{"v": 1}')
+    k.restore(inp, tmp_path / "unz")
+    assert len(list((k.OUT_RESULTS / "tune_algorithms").glob("*/*/seed7/COMPLETE"))) == 3
+    assert (k.OUT_RESULTS / "tune_base/amazon_vg/selected.json").exists()
+    assert (k.CODE / "data_cache/features/amazon2023_x/meta.json").exists()
+
+
+def test_result_archives_kept_as_zip_are_extracted_and_restored(tmp_path):
+    import zipfile
+
+    k = load_kernel(tmp_path)
+    staging = tmp_path / "staging"
+    make_job3a_output(staging, completed=4)
+    inp = tmp_path / "input" / "fedbench-results"
+    inp.mkdir(parents=True)
+    with zipfile.ZipFile(inp / "fedbench_results_fedbench-job3.zip", "w") as z:
+        for f in staging.rglob("*"):
+            if f.is_file():
+                z.write(f, f.relative_to(staging))
+    k.restore(tmp_path / "input", tmp_path / "unz")
+    assert len(list((k.OUT_RESULTS / "tune_algorithms").glob("*/*/seed7/COMPLETE"))) == 4
+
+
+def test_preflight_refuses_to_redo_work_or_rebuild_bundles(tmp_path):
+    k = load_kernel(tmp_path)
+    make_job3a_output(tmp_path / "input" / "job3a", completed=2)
+    k.restore(tmp_path / "input", tmp_path / "unz")
+    k.JOB.update(expect_complete={"tune_algorithms": 33}, require_bundles=[])
+    with pytest.raises(SystemExit, match="(?s)PREFLIGHT FAILED.*2 completed runs restored, expected at least 33"):
+        k.preflight()
+    k.JOB.update(expect_complete={"tune_algorithms": 2}, require_bundles=["amazon2023_x"])
+    with pytest.raises(SystemExit, match="bundle amazon2023_x not found"):
+        k.preflight()
+    write(k.CODE / "data_cache/features/amazon2023_x/meta.json", "{}")
+    k.preflight()                                           # everything expected is present
+
+
+def test_code_commit_pin_requires_identical_experiment_code():
+    spec = importlib.util.spec_from_file_location("kaggle_job", ROOT / "tools" / "kaggle_job.py")
+    tool = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(tool)
+    head = tool.git("rev-parse", "HEAD")
+    # 10f519b predates the partition-loading fix in src/: must be refused
+    with pytest.raises(SystemExit, match="experiment code changed"):
+        tool.check_code_commit("10f519b", head)
+    # the experiment code of 3415496 (Job 3a) is unchanged at HEAD
+    assert tool.check_code_commit("3415496", head).startswith("3415496")

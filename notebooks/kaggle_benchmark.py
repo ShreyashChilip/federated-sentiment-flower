@@ -31,6 +31,9 @@ JOB = {
     "keep_bundles": True,       # copy built feature bundles into the output for the next session
     "extra_args": [],
     "verify": [],               # stages whose artifacts are re-validated at the end
+    "expect_complete": {},      # stage -> completed runs that must be restored before anything runs
+    "require_bundles": [],      # feature bundles that must be restored (never silently rebuilt)
+    "wrapper_commit": None,     # commit of this wrapper script (may be newer than "commit")
     "slug": "job",
 }
 
@@ -47,9 +50,39 @@ def sh(*cmd, check=True, **kw):
     return subprocess.run(list(map(str, cmd)), check=check, **kw)
 
 
-def _find(inputs: Path, name: str) -> list[Path]:
-    """Directories called ``name`` in attached inputs (notebook outputs may be nested once)."""
-    return sorted(set(inputs.glob(f"*/{name}")) | set(inputs.glob(f"*/*/{name}")))
+RESTORE_NAMES = ("results_benchmark", "partitions", "bundles")
+
+
+def _scan(root: Path, max_depth: int = 6) -> dict:
+    """Folders named results_benchmark / partitions / bundles at any depth below ``root``.
+
+    Kaggle mounts notebook outputs and datasets at different depths
+    (/kaggle/input/<slug>/..., /kaggle/input/datasets/<owner>/<slug>/...), so the
+    search does not assume one layout. A found folder is not descended into.
+    """
+    found = {name: [] for name in RESTORE_NAMES}
+    for dirpath, dirnames, _ in os.walk(root, followlinks=True):
+        depth = len(Path(dirpath).relative_to(root).parts)
+        for d in list(dirnames):
+            if d in found:
+                found[d].append(Path(dirpath) / d)
+                dirnames.remove(d)
+        if depth >= max_depth:
+            dirnames[:] = []
+    return {k: sorted(v) for k, v in found.items()}
+
+
+def _expand_zips(inputs: Path, dest: Path) -> list[Path]:
+    """Extract result archives that a dataset kept as .zip files (read-only inputs)."""
+    out = []
+    for z in sorted(inputs.rglob("fedbench_results_*.zip")):
+        target = dest / f"{z.parent.name}__{z.stem}"
+        if not target.exists():
+            print(f"extract {z} -> {target}", flush=True)
+            with zipfile.ZipFile(z) as archive:
+                archive.extractall(target)
+        out.append(target)
+    return out
 
 
 def _merge_status(a: dict, b: dict) -> dict:
@@ -94,16 +127,25 @@ def merge_tree(src: Path, dest: Path, origin: str, conflicts: list) -> None:
             conflicts.append(f"{origin}: {rel}")
 
 
-def restore(inputs: Path = Path("/kaggle/input")) -> None:
-    """Bring earlier kernel outputs (attached as inputs) into place; abort on any conflict."""
+def restore(inputs: Path = Path("/kaggle/input"), unzip_dir: Path = Path("/tmp/fedbench_restore")) -> None:
+    """Bring earlier outputs (attached notebooks or datasets) into place; abort on any conflict."""
     conflicts: list = []
+    roots = [inputs] if inputs.exists() else []
+    if inputs.exists():
+        roots += _expand_zips(inputs, unzip_dir)
+    found = {name: [] for name in RESTORE_NAMES}
+    for root in roots:
+        for name, dirs in _scan(root).items():
+            found[name] += dirs
     for name, dest in (("results_benchmark", OUT_RESULTS), ("partitions", OUT_PARTITIONS)):
-        for src in _find(inputs, name):
+        for src in found[name]:
             print(f"restore {src} -> {dest}", flush=True)
             merge_tree(src, dest, src.parent.name, conflicts)
     features = CODE / "data_cache" / "features"
-    for bundles in _find(inputs, "bundles"):
+    for bundles in found["bundles"]:
         for b in sorted(bundles.iterdir()):
+            if not (b / "meta.json").exists():
+                continue
             target = features / b.name
             if target.exists():
                 if (target / "meta.json").read_bytes() != (b / "meta.json").read_bytes():
@@ -116,6 +158,28 @@ def restore(inputs: Path = Path("/kaggle/input")) -> None:
         raise SystemExit("restore found conflicting artifacts; nothing was run:\n  " + "\n  ".join(conflicts))
 
 
+def preflight() -> None:
+    """Refuse to start unless the expected earlier work was restored.
+
+    Without this, a job whose inputs were not found would silently redo
+    finished runs (and a missing bundle would be rebuilt instead of reused).
+    """
+    problems = []
+    for stage, want in JOB.get("expect_complete", {}).items():
+        have = sum(1 for _ in (OUT_RESULTS / stage).glob("*/*/seed*/COMPLETE"))
+        print(f"preflight: {stage} has {have} completed run(s) restored (expected >= {want})", flush=True)
+        if have < want:
+            problems.append(f"{stage}: {have} completed runs restored, expected at least {want}")
+    for name in JOB.get("require_bundles", []):
+        ok = (CODE / "data_cache" / "features" / name / "meta.json").exists()
+        print(f"preflight: bundle {name} {'present' if ok else 'MISSING'}", flush=True)
+        if not ok:
+            problems.append(f"feature bundle {name} not found in the inputs")
+    if problems:
+        raise SystemExit("PREFLIGHT FAILED, nothing was run:\n  - " + "\n  - ".join(problems)
+                         + "\nAttach the outputs named in the job instructions (Add Input) and run again.")
+
+
 def main() -> None:
     if not CODE.exists():
         sh("git", "clone", "--quiet", JOB["repo"], CODE)
@@ -124,6 +188,7 @@ def main() -> None:
     OUT_RESULTS.mkdir(parents=True, exist_ok=True)
     OUT_PARTITIONS.mkdir(parents=True, exist_ok=True)
     restore()
+    preflight()
     # results/benchmark and partitions written straight into the saved output
     (CODE / "results").mkdir(exist_ok=True)
     link = CODE / "results" / "benchmark"
