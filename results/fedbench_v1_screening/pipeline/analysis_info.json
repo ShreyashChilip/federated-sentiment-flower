@@ -1,0 +1,20 @@
+{
+ "stage": "screening",
+ "runs": 81,
+ "screening_outcome": "no_candidate",
+ "regimes": [
+  "amazon_vg",
+  "yelp_dir01",
+  "yelp_iid"
+ ],
+ "commits": [
+  "3415496ee93fbd583f7f0657bcbf7f3648120c36"
+ ],
+ "all_official": true,
+ "min_eval_n": 5,
+ "targets": {
+  "yelp_iid": 0.8558012804035614,
+  "yelp_dir01": 0.710629397304307,
+  "amazon_vg": 0.16657356020396802
+ }
+}
