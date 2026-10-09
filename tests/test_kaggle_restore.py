@@ -13,6 +13,7 @@ def load_kernel(tmp_path):
     k = importlib.util.module_from_spec(spec)
     spec.loader.exec_module(k)             # main() is not run on import
     k.OUT_RESULTS, k.OUT_PARTITIONS, k.CODE = tmp_path / "out_r", tmp_path / "out_p", tmp_path / "code"
+    k.OUT_EXPLORATORY = tmp_path / "out_x"
     return k
 
 
@@ -157,3 +158,14 @@ def test_partition_summaries_with_real_differences_still_conflict(tmp_path, othe
     write(inp / "job3a" / "partitions" / "amazon_natural.json", other)
     with pytest.raises(SystemExit, match="conflicting"):
         k.restore(inp, tmp_path / "unz")
+
+
+def test_exploratory_results_are_restored_separately_from_official_ones(tmp_path):
+    k = load_kernel(tmp_path)
+    inp = tmp_path / "input"
+    write(inp / "a" / "results_benchmark" / "tune_base/amazon_vg/selected.json", '{"lr": 0.3}')
+    write(inp / "b" / "results_exploratory" / "cce_v1/explore/amazon_vg/cav__reference/seed7/COMPLETE", "{}")
+    k.restore(inp, tmp_path / "unz")
+    assert (k.OUT_EXPLORATORY / "cce_v1/explore/amazon_vg/cav__reference/seed7/COMPLETE").exists()
+    assert not (k.OUT_RESULTS / "cce_v1").exists()
+    assert (k.OUT_RESULTS / "tune_base/amazon_vg/selected.json").exists()

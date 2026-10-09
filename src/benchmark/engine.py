@@ -35,6 +35,7 @@ from pathlib import Path
 import numpy as np
 import scipy.sparse as sp
 
+from src.benchmark import exploratory_algorithms  # noqa: F401  (registers EXPLORATORY algorithms; frozen ones unchanged)
 from src.benchmark.algorithms import make_algorithm
 from src.benchmark.evaluation import Evaluator, compact
 from src.clients.trainer import local_train, planned_steps
@@ -193,9 +194,14 @@ def run_federated(run_dir) -> dict:
     # Scratch space (SCAFFOLD client state) is an execution detail, not part of the config.
     scratch = Path(os.environ.get("FEDBENCH_SCRATCH") or (run_dir / "_scratch"))
     algo = make_algorithm(fl, x, rt.num_clients, scratch / run_dir.name)
+    # Opt-in hooks used only by exploratory algorithms; every frozen algorithm takes the old path.
+    needs_support = bool(getattr(algo, "needs_support", False))
+    eval_weights = getattr(algo, "evaluation_weights", None)
+    if hasattr(algo, "diagnostics_dir"):
+        algo.diagnostics_dir = run_dir / "algo_diagnostics"
     model_bytes = int(sum(w.nbytes for w in x))
     down_msg = model_bytes * algo.downlink_model_copies
-    up_msg = model_bytes * algo.uplink_model_copies
+    up_msg = model_bytes * algo.uplink_model_copies + int(getattr(algo, "uplink_extra_bytes", 0))
 
     rounds = int(fl["rounds"])
     full_every = int(cfg["eval"].get("full_every", 10) or rounds)
@@ -228,6 +234,9 @@ def run_federated(run_dir) -> dict:
                     seed=derive_seed("batch", seed, cid, rnd), device=device,
                     algorithm=algo.local_rule, **algo.client_kwargs(cid),
                 )
+                if needs_support:
+                    # features present in the training rows processed this round (one full epoch)
+                    out["support"] = np.unique(b.x_train[rows].indices)
                 ta = time.perf_counter()
                 algo.add_client(cid, int(out["num_examples"]), out)
                 agg_wall += time.perf_counter() - ta
@@ -258,9 +267,11 @@ def run_federated(run_dir) -> dict:
             if finite and (rnd % every == 0 or rnd == rounds):
                 te = time.perf_counter()
                 full = rnd % full_every == 0 and rnd != rounds
-                evals = evaluator.evaluate(x, eval_names(cfg, evaluator, full))
+                evals = evaluator.evaluate(eval_weights(x) if eval_weights else x, eval_names(cfg, evaluator, full))
                 for name, entry in evals.items():
                     row.update(compact(entry, name))
+                if eval_weights:   # the reported model differs from the training iterate (FedExP)
+                    row["val_macro_f1_last_iterate"] = evaluator.evaluate(x, ("val",), per_client=False)["val"]["pooled"]["macro_f1"]
                 eval_wall += time.perf_counter() - te
             row["round_wall_s"] = time.perf_counter() - t_round
             history.append(row)
@@ -274,7 +285,8 @@ def run_federated(run_dir) -> dict:
 
     te = time.perf_counter()
     finite = all(np.isfinite(w).all() for w in x)
-    evals = evaluator.evaluate(x, eval_names(cfg, evaluator, True)) if finite else {}
+    x_report = eval_weights(x) if (eval_weights and finite) else x
+    evals = evaluator.evaluate(x_report, eval_names(cfg, evaluator, True)) if finite else {}
     eval_wall += time.perf_counter() - te
     if history and finite:
         for name, entry in evals.items():   # the last history row carries the full final evaluation
@@ -304,7 +316,11 @@ def run_federated(run_dir) -> dict:
         "model": parameter_counts(model),
         "weights_sha256": weights_sha256(x),
     }
-    np.savez_compressed(run_dir / "final_weights.npz", *x)
+    if eval_weights:
+        final["reported_model"] = "average_of_last_two_iterates"
+        final["reported_weights_sha256"] = weights_sha256(x_report)
+        np.savez_compressed(run_dir / "last_iterate_weights.npz", *x)
+    np.savez_compressed(run_dir / "final_weights.npz", *x_report)
     _dump(run_dir, "history", history)
     _dump(run_dir, "clients", clients)
     if unseen is not None:

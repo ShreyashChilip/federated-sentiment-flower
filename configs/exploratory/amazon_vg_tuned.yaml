@@ -1,0 +1,11 @@
+# EXPLORATORY / POST-SCREENING (docs/EXPLORATORY_CCE_PROTOCOL.md). Not part of fedbench_v1.
+# The frozen Amazon Video Games regime with the client lr / weight decay that the
+# OFFICIAL tune_base stage selected (results archive of the final tuning session,
+# tune_base/amazon_vg/selected.json: lr 0.3, wd 1e-6, seed 7, commit 3415496).
+# Only fl.lr and fl.weight_decay are set here; data, features and partition are
+# inherited unchanged, so the feature bundle and partition are the official ones.
+inherits: ../exp0b_frozen.yaml
+
+fl:
+  lr: 0.3
+  weight_decay: 0.000001

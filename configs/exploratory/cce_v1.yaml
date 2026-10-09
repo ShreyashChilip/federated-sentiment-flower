@@ -1,0 +1,42 @@
+# EXPLORATORY / POST-SCREENING pilot "explore_cce_v1" (docs/EXPLORATORY_CCE_PROTOCOL.md).
+# Standalone on purpose: it must NOT inherit configs/benchmark.yaml, whose frozen
+# algorithm grids would otherwise be merged in. Nothing here changes fedbench_v1.
+# Seed 7 only, validation data only (eval.test is forced to false by the stage kind).
+benchmark:
+  name: explore_cce_v1
+  results_dir: results/exploratory/cce_v1
+
+  common:                      # identical engine settings to fedbench_v1
+    device: cpu
+    client_threads: 1
+    eval:
+      every: 1
+      full_every: 10
+
+  regimes:
+    amazon_vg:
+      config: exploratory/amazon_vg_tuned.yaml
+      cell: natural
+      base_tuning: inherited   # lr 0.3, wd 1e-6 = official tune_base selection
+    yelp_dir01:
+      config: exp0a_tuned.yaml
+      cell: label_skew
+      base_tuning: inherited   # lr 0.3, wd 1e-6 = frozen 0A tuning
+
+  tuning_seed: 7
+  algorithm_grids:
+    # C1 control: FedAvg with a server learning rate (server_lr 1 = bit-identity sentinel)
+    fedavg: {server_lr: [1.0, 3.0, 10.0, 30.0, 100.0]}
+    # C1 control: FedExP, published epsilon grid (ICLR 2023, App. D.3)
+    fedexp: {fedexp_eps: [0.001, 0.0031622776601683794, 0.01, 0.031622776601683794, 0.1]}
+    cav: {}                    # coverage-normalized averaging (mandatory ablation)
+    cce: {}                    # CCE-v2 (eta = S/A^2), no tunable parameter
+    cce_unit: {}               # decomposition check: must equal FedAvg up to rounding
+    fedyogi: {server_lr: [3.0]}   # fairness check beyond the frozen grid edge (1.0)
+
+  target_fraction_of_tuned_fedavg: 0.95
+
+  stages:
+    explore:
+      kind: tune_algorithms
+      regimes: [amazon_vg, yelp_dir01]

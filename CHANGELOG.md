@@ -3,6 +3,27 @@
 Protocol and code changes that can affect results. Each entry states whether
 results had been seen when the change was made.
 
+## 2026-10-09 (EXPLORATORY / POST-SCREENING, branch explore/cce-v1; no exploratory run yet)
+
+* Pre-registered exploratory pilot `explore_cce_v1` (docs/EXPLORATORY_CCE_PROTOCOL.md):
+  seed 7, validation only, 28 runs: FedAvg with server lr {1,3,10,30,100} (lr 1 =
+  bit-identity sentinel), FedExP (published eps grid, two-iterate average), CAV
+  (coverage-normalized averaging), CCE-v2, CCE-unit (decomposition check), FedYogi
+  server lr 3.0. Written after the frozen screening results were known; it is not
+  part of fedbench_v1 and makes no novelty or accuracy claim.
+* New: `src/benchmark/exploratory_algorithms.py`, `src/benchmark/exploratory_decision.py`,
+  `experiments/explore_cce_analyze.py`, `configs/exploratory/*`, tests.
+* `src/benchmark/engine.py`: opt-in hooks only (evaluation weights, client feature
+  support, diagnostics folder, extra uplink bytes). Frozen algorithms take the old
+  path; FedAvg/SCAFFOLD Flower bit-equivalence tests pass unchanged.
+* Kaggle wrapper/generator: `bench` option and a separate `results_exploratory`
+  output folder (restored and archived separately from official results).
+* Mathematical review before implementation: CCE-v2's S/A^2 equals r/c with
+  r = E[D^2]/(E|D|)^2 >= 1, i.e. CCE-v2 = CAV x r (magnitude-dispersion
+  extrapolation). Absent features are defined by exact support, because the float32
+  residue of analytic weight-decay removal (measured up to 1.7e-5 |x|, never 0) makes
+  delta-based coverage unreliable.
+
 ## 2026-10-08 (tuning complete; decision before screening: run screening as frozen; no screening result existed)
 
 * Tuning complete on Kaggle, experiments at 3415496: tune_base 9/9,

@@ -25,3 +25,14 @@ def test_generated_script_uses_python_literals_and_round_trips():
     tree = ast.parse(src)
     value = next(n.value for n in tree.body if isinstance(n, ast.Assign) and getattr(n.targets[0], "id", "") == "JOB")
     assert ast.literal_eval(value) == job
+
+
+def test_generated_script_carries_the_benchmark_config():
+    job = {"repo": "r", "commit": "a" * 40, "stages": ["explore"], "max_hours": 10.0, "diagnostics": [], "analyze": [],
+           "keep_bundles": True, "extra_args": [], "verify": ["explore"], "slug": "x", "bench": "exploratory/cce_v1.yaml",
+           "expect_complete": {}, "require_bundles": ["b"], "wrapper_commit": "a" * 40}
+    src = load_tool().render_script(job)
+    tree = ast.parse(src)
+    value = next(n.value for n in tree.body if isinstance(n, ast.Assign) and getattr(n.targets[0], "id", "") == "JOB")
+    assert ast.literal_eval(value)["bench"] == "exploratory/cce_v1.yaml"
+    assert '"--bench", JOB.get("bench", "benchmark.yaml")' in src

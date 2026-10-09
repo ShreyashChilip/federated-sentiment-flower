@@ -32,6 +32,7 @@ def main() -> None:
     ap.add_argument("--slug", required=True)
     ap.add_argument("--user", default=None, help="Kaggle username (default: from the CLI config)")
     ap.add_argument("--stages", nargs="*", default=[])
+    ap.add_argument("--bench", default="benchmark.yaml", help="benchmark config passed to run/status/verify")
     ap.add_argument("--diagnostics", nargs="*", default=[], help="regime:seed")
     ap.add_argument("--analyze", nargs="*", default=[])
     ap.add_argument("--sources", nargs="*", default=[], help="earlier kernel slugs whose output is restored")
@@ -65,7 +66,7 @@ def main() -> None:
     job = {"repo": git("remote", "get-url", "origin"), "commit": commit, "stages": args.stages,
            "max_hours": args.max_hours,
            "diagnostics": [[d.split(":")[0], int(d.split(":")[1])] for d in args.diagnostics],
-           "analyze": args.analyze, "keep_bundles": True, "extra_args": extra, "verify": args.verify, "slug": args.slug,
+           "analyze": args.analyze, "keep_bundles": True, "extra_args": extra, "verify": args.verify, "slug": args.slug, "bench": args.bench,
            "expect_complete": {e.split(":")[0]: int(e.split(":")[1]) for e in args.expect},
            "require_bundles": list(args.require_bundle), "wrapper_commit": wrapper_commit}
     src = render_script(job)

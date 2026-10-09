@@ -29,6 +29,7 @@ JOB = {
     "diagnostics": [],          # e.g. [["amazon_vg", 42]]
     "analyze": [],              # stages to analyze at the end
     "keep_bundles": True,       # copy built feature bundles into the output for the next session
+    "bench": "benchmark.yaml",  # benchmark config for run/status/verify (exploratory configs live elsewhere)
     "extra_args": [],
     "verify": [],               # stages whose artifacts are re-validated at the end
     "expect_complete": {},      # stage -> completed runs that must be restored before anything runs
@@ -41,6 +42,7 @@ T0 = time.time()
 WORK = Path("/kaggle/working")
 CODE = Path("/tmp/fl")
 OUT_RESULTS = WORK / "results_benchmark"
+OUT_EXPLORATORY = WORK / "results_exploratory"   # EXPLORATORY runs (results/exploratory); never mixed with the official ones
 OUT_BUNDLES = WORK / "bundles"
 OUT_PARTITIONS = WORK / "partitions"
 
@@ -50,7 +52,7 @@ def sh(*cmd, check=True, **kw):
     return subprocess.run(list(map(str, cmd)), check=check, **kw)
 
 
-RESTORE_NAMES = ("results_benchmark", "partitions", "bundles")
+RESTORE_NAMES = ("results_benchmark", "results_exploratory", "partitions", "bundles")
 
 
 def _scan(root: Path, max_depth: int = 6) -> dict:
@@ -157,7 +159,7 @@ def restore(inputs: Path = Path("/kaggle/input"), unzip_dir: Path = Path("/tmp/f
     for root in roots:
         for name, dirs in _scan(root).items():
             found[name] += dirs
-    for name, dest in (("results_benchmark", OUT_RESULTS), ("partitions", OUT_PARTITIONS)):
+    for name, dest in (("results_benchmark", OUT_RESULTS), ("results_exploratory", OUT_EXPLORATORY), ("partitions", OUT_PARTITIONS)):
         for src in found[name]:
             print(f"restore {src} -> {dest}", flush=True)
             merge_tree(src, dest, src.parent.name, conflicts)
@@ -206,14 +208,15 @@ def main() -> None:
     sh("git", "-C", CODE, "checkout", "--quiet", JOB["commit"])
     sh(sys.executable, "-m", "pip", "install", "-q", "-r", CODE / "requirements-kaggle.txt")
     OUT_RESULTS.mkdir(parents=True, exist_ok=True)
+    OUT_EXPLORATORY.mkdir(parents=True, exist_ok=True)
     OUT_PARTITIONS.mkdir(parents=True, exist_ok=True)
     restore()
     preflight()
     # results/benchmark and partitions written straight into the saved output
     (CODE / "results").mkdir(exist_ok=True)
-    link = CODE / "results" / "benchmark"
-    if not link.exists():
-        os.symlink(OUT_RESULTS, link)
+    for link, target in ((CODE / "results" / "benchmark", OUT_RESULTS), (CODE / "results" / "exploratory", OUT_EXPLORATORY)):
+        if not link.exists():
+            os.symlink(target, link)
     for f in OUT_PARTITIONS.glob("*"):
         if not (CODE / "partitions" / f.name).exists():
             shutil.copy2(f, CODE / "partitions" / f.name)
@@ -232,14 +235,14 @@ def main() -> None:
         sh(sys.executable, "experiments/client_diagnostics.py", "--regimes", regime, "--seeds", seed, check=False)
     remaining = JOB["max_hours"] - (time.time() - T0) / 3600
     if JOB["stages"]:
-        sh(sys.executable, "experiments/run_benchmark.py", "run", "--stages", *JOB["stages"],
+        sh(sys.executable, "experiments/run_benchmark.py", "run", "--bench", JOB.get("bench", "benchmark.yaml"), "--stages", *JOB["stages"],
            "--max-hours", f"{max(remaining, 0.1):.2f}", *JOB["extra_args"], check=False)
     for stage in JOB["analyze"]:
-        sh(sys.executable, "experiments/analyze_benchmark.py", "--stages", stage, check=False)
+        sh(sys.executable, "experiments/analyze_benchmark.py", "--bench", JOB.get("bench", "benchmark.yaml"), "--stages", stage, check=False)
     for stage in JOB["stages"]:
-        sh(sys.executable, "experiments/run_benchmark.py", "status", "--stages", stage, check=False)
+        sh(sys.executable, "experiments/run_benchmark.py", "status", "--bench", JOB.get("bench", "benchmark.yaml"), "--stages", stage, check=False)
     if JOB.get("verify"):
-        sh(sys.executable, "experiments/run_benchmark.py", "verify", "--stages", *JOB["verify"], check=False)
+        sh(sys.executable, "experiments/run_benchmark.py", "verify", "--bench", JOB.get("bench", "benchmark.yaml"), "--stages", *JOB["verify"], check=False)
 
     for f in (CODE / "partitions").glob("*"):
         if f.is_file() and not (OUT_PARTITIONS / f.name).exists():
@@ -257,7 +260,7 @@ def main() -> None:
     # One compact archive to download (results + partitions; bundles stay as kernel output only).
     archive = WORK / f"fedbench_results_{JOB['slug']}.zip"
     with zipfile.ZipFile(archive, "w", zipfile.ZIP_DEFLATED) as z:
-        for base in (OUT_RESULTS, OUT_PARTITIONS):
+        for base in (OUT_RESULTS, OUT_EXPLORATORY, OUT_PARTITIONS):
             for f in base.rglob("*"):
                 if f.is_file():
                     z.write(f, f.relative_to(WORK))
