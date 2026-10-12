@@ -253,9 +253,29 @@ def test_cli_two_workers_tune_select_evaluate_and_deadline(tmp_path):
     assert r.returncode == 0 and "[worker" not in r.stdout                    # nothing re-run
 
 
-def test_pilot_projection(ctx, tmp_path):
+def test_pilot_resume_and_projection(ctx, tmp_path):
     res = m.pilot(ctx, tmp_path)
     assert set(res["regimes"]) == {"yelp_iid", "yelp_dir01", "amazon_vg"}
     for v in res["regimes"].values():
-        assert v["projected_hours_per_federated_run"] > 0 and v["selected"] >= 1
-    assert (tmp_path / "pilot" / "pilot.json").exists()
+        assert v["measured"]["checkpoint"]["resumed_and_completed"] is True
+        assert v["measured"]["checkpoint"]["round"] == 1 and len(v["measured"]["rounds"]) == 2
+        assert v["unit_costs"]["step_s"] > 0 and v["measured"]["steps_per_s"] > 0
+    pr = res["projection"]
+    # study(): 2 mu x 3 regimes tuning + 2 methods x 3 regimes x 1 seed + 2 centralized
+    assert pr["planned_runs"] == 6 + 6 + 2 == len(pr["runs"])
+    assert pr["gpu_hours"]["low"] <= pr["gpu_hours"]["point"] <= pr["gpu_hours"]["high"] < pr["gpu_hours"]["high_with_contingency"]
+    for r in pr["runs"]:
+        if r["run"].startswith(("tune", "evaluate/yelp", "evaluate/amazon")):
+            w = m.planned_workload(ctx, r["run"].split("/")[1], 7 if r["run"].startswith("tune") else 42)
+            assert r["steps"] == w["steps"] and w["rounds"] == 3
+    assert res["data"]["amazon"]["held_out"]["source"] == "unseen-product clients"
+    assert json.loads((tmp_path / "pilot" / "pilot.json").read_text())["projection"]["planned_runs"] == 14
+
+
+def test_planned_workload_matches_actual_run(ctx, tmp_path):
+    ctx["backend"] = ctx["backends"]["amazon"]
+    m.federated_run(ctx, "amazon_vg", 42, "fedavg", 0.0, tmp_path / "r")
+    hist = json.loads((tmp_path / "r" / "history.json").read_text())
+    w = m.planned_workload(ctx, "amazon_vg", 42)
+    assert w["steps"] == sum(h["client_steps"] for h in hist) and w["client_updates"] == sum(h["selected"] for h in hist)
+    assert w["distinct_clients"] == sum(h["new_clients"] for h in hist)

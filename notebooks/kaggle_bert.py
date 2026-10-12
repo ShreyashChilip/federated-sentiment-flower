@@ -123,9 +123,11 @@ def main() -> None:
     print(f"GPUs: {gpus} ({torch.cuda.get_device_name(0) if torch.cuda.is_available() else 'none'})", flush=True)
     os.environ["FEDBERT_DEADLINE"] = str(T0 + 3600 * (JOB["max_hours"] - JOB["margin_hours"]))
     base = [sys.executable, "experiments/distilbert_fl.py", "--config", JOB["config"], "--out", OUT_RESULTS, "--cache", OUT_CACHE]
-    sh(*base, "--phase", "prepare")
-    if JOB["phase"] == "pilot":
-        sh(*base, "--phase", "pilot")
+    prep = sh(*base, "--phase", "prepare", check=False)   # verifies data identity; a mismatch aborts here
+    if prep.returncode != 0:
+        print("PREPARE FAILED (data verification or loading); no training was run", flush=True)
+    elif JOB["phase"] == "pilot":
+        sh(*base, "--phase", "pilot", check=False)
     else:
         sh(*base, "--phase", "all", "--gpus", gpus, check=False)
 

@@ -70,9 +70,15 @@ Config `configs/exploratory/extend_v1/bert.yaml`; script `experiments/distilbert
   this model (AdamW decoupled weight decay moves every row); the figure is an upper bound on what row sparsity
   could save, reported to contrast with the linear model.
 * Runs: 9 tuning + 18 federated evaluation + 6 centralized runs = 33 runs.
-* Compute: unknown until the pilot. The pilot (one full-scale FedAvg round per regime plus one validation and one
-  held-out pass) projects per-run GPU hours. If the projection exceeds the available quota, the author decides
-  before any tuning run starts; the protocol is not shortened silently (no fewer rounds, clients or data).
+* Tuning runs evaluate validation only; held-out data is never read in a tuning run.
+* Compute: unknown until the pilot. The pilot is a timing and pipeline check, never reported as a result: per regime,
+  on the full data, two FedProx rounds (mu 0.01, seed 42; FedProx steps cost at least as much as FedAvg steps) with
+  a checkpoint, a genuine pause and a resume between them, then one validation, one held-out and one client-test
+  pass. It records measured step time, per-client overhead, evaluation times, throughput, GPU and host memory and
+  checkpoint size, and projects every planned run from these unit costs and the exact workload of that run
+  (client sampling replayed). Assumptions and a range are written to `pilot.json`. If the projection exceeds the
+  available quota, the author decides before any tuning run starts; the protocol is not shortened silently (no
+  fewer rounds, clients, seeds or data).
 * Analysis: held-out macro-F1 by round for FedAvg, FedProx and centralized per regime; federated minus
   centralized gap; FedProx minus FedAvg (paired by seed); comparison with the TF-IDF+LR runs on the same data
   and seeds (descriptive: model, optimizer and parameter count differ); derived bytes per round for both models.
@@ -82,3 +88,9 @@ Config `configs/exploratory/extend_v1/bert.yaml`; script `experiments/distilbert
 * fedbench_v1 artifacts are read-only inputs (selections copied with checksums; bundles used only for labels,
   roles and client codes).
 * The confirm_v1 study is separate and unaffected.
+
+## Amendments (all before any extend_v1 run)
+* 2026-10-12 (after commit ab49d2b, before any launch): pilot redesigned to measure unit costs over two rounds with
+  a real pause/resume and to project every planned run exactly; tuning runs no longer read held-out data; the
+  support-size cache is stored in checkpoints. No study setting (data, regimes, model, optimizer, rounds, seeds,
+  grids, evaluation points) changed.

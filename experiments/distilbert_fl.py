@@ -301,19 +301,33 @@ def train_step(backend, model, opt, scaler, tokens, labels, b, mu=0.0, anchor=No
     return float(loss.detach())
 
 
-def local_train(backend, model, tokens, labels, rows, *, epochs, batch_size, lr, weight_decay, seed, mu=0.0, anchor=None):
-    """One client's local training: fresh AdamW, mini-batches in a seeded order, optional FedProx term."""
+def sync(backend):
+    if backend.device.startswith("cuda"):
+        torch.cuda.synchronize()
+
+
+def local_train(backend, model, tokens, labels, rows, *, epochs, batch_size, lr, weight_decay, seed, mu=0.0, anchor=None, timing=None):
+    """One client's local training: fresh AdamW, mini-batches in a seeded order, optional FedProx term.
+    ``timing`` (optional dict) accumulates per-client setup time and mini-batch step time (GPU-synchronized)."""
+    t = time.time()
     model.train()
     opt = make_optimizer(model, lr, weight_decay)
     scaler = torch.amp.GradScaler("cuda", enabled=backend.device.startswith("cuda"))
     named = dict(model.named_parameters())
     steps, losses = 0, []
     rows = np.asarray(rows)
+    if timing is not None:
+        sync(backend)
+        timing["setup_s"] = timing.get("setup_s", 0.0) + time.time() - t
+        t = time.time()
     for ep in range(int(math.ceil(epochs))):
         order = np.random.default_rng(seed + ep).permutation(len(rows))
         for i in range(0, len(rows), batch_size):
             losses.append(train_step(backend, model, opt, scaler, tokens, labels, rows[order[i:i + batch_size]], mu, anchor, named))
             steps += 1
+    if timing is not None:
+        sync(backend)
+        timing["step_s"] = timing.get("step_s", 0.0) + time.time() - t
     return steps, float(np.mean(losses)) if losses else float("nan")
 
 
@@ -420,7 +434,8 @@ def held_out_predictions(backend, model, ctx, dataset):
 
 
 # ============================================================================ runs
-def federated_run(ctx, regime: str, seed: int, method: str, mu: float, run_dir: Path, *, eval_test=True, max_rounds=None):
+def federated_run(ctx, regime: str, seed: int, method: str, mu: float, run_dir: Path, *, eval_test=True, max_rounds=None,
+                  pause_after=None):
     backend, study, R = ctx["backend"], ctx["study"], ctx["regimes"][regime]
     ds = R["dataset"]
     data, tokens = ctx["data"][ds], ctx["tokens"][ds]
@@ -443,7 +458,7 @@ def federated_run(ctx, regime: str, seed: int, method: str, mu: float, run_dir: 
         saved = torch.load(ck, map_location=backend.device, weights_only=False)
         glob, history, start = {k: v.to(backend.device) for k, v in saved["glob"].items()}, saved["history"], saved["round"] + 1
         print(f"    resumed {run_dir} at round {start}", flush=True)
-    support = {}
+    support = {int(k): v for k, v in saved.get("support", {}).items()} if ck.exists() else {}
     cum_d = history[-1]["cum_dense_bytes"] if history else 0
     cum_s = history[-1]["cum_support_bytes"] if history else 0
     for rnd in range(start, rounds + 1):
@@ -453,27 +468,38 @@ def federated_run(ctx, regime: str, seed: int, method: str, mu: float, run_dir: 
         sel = select_clients(eligible, float(fl["fraction_fit"]), int(fl.get("min_fit_clients", 1)), seed, rnd)
         total = float(sum(len(train_rows[c]) for c in sel))
         agg = {k: torch.zeros_like(v, dtype=torch.float64) for k, v in glob.items()}
-        steps, losses = 0, []
+        steps, losses, new_clients, timing = 0, [], 0, {"setup_s": 0.0, "step_s": 0.0, "copy_agg_s": 0.0, "support_s": 0.0}
         for c in sel:
+            tc = time.time()
             set_state(model, glob)
+            timing["copy_agg_s"] += time.time() - tc
             s, loss = local_train(backend, model, tokens, y, train_rows[c], epochs=float(fl["local_epochs"]),
                                   batch_size=int(fl["batch_size"]), lr=float(study["lr"]), weight_decay=float(study["weight_decay"]),
-                                  seed=derive_seed("batch", seed, c, rnd), mu=mu if method == "fedprox" else 0.0, anchor=glob)
+                                  seed=derive_seed("batch", seed, c, rnd), mu=mu if method == "fedprox" else 0.0, anchor=glob,
+                                  timing=timing)
+            tc = time.time()
             w = len(train_rows[c]) / total
             sd = model.state_dict()
             for k in keys:                       # streaming sample-size-weighted FedAvg aggregation (float64)
                 agg[k] += sd[k].detach().double() * w
+            sync(backend)
+            timing["copy_agg_s"] += time.time() - tc
             steps += s
             losses.append(loss)
-            if c not in support:
+            if c not in support:                 # bookkeeping for the derived byte estimate (CPU, timed separately)
+                new_clients += 1
+                tc = time.time()
                 support[c] = tokens.support_size(train_rows[c])
+                timing["support_s"] += time.time() - tc
         glob = {k: v.float() for k, v in agg.items()}
         del agg
         set_state(model, glob)
         cum_d += len(sel) * 2 * acc_info["dense_message_bytes"]
         cum_s += sum(2 * support_message_bytes(acc_info, support[c]) for c in sel)
-        row = {"round": rnd, "selected": len(sel), "client_steps": steps, "train_loss": float(np.mean(losses)),
-               "train_wall_s": time.time() - tr, "cum_dense_bytes": cum_d, "cum_support_bytes": cum_s}
+        sync(backend)
+        row = {"round": rnd, "selected": len(sel), "client_steps": steps, "examples": int(total), "new_clients": new_clients,
+               "train_loss": float(np.mean(losses)), "train_wall_s": time.time() - tr,
+               **{f"{k[:-2]}_wall_s": v for k, v in timing.items()}, "cum_dense_bytes": cum_d, "cum_support_bytes": cum_s}
         last = rnd == rounds
         if last or rnd % int(study.get("eval_val_every", 1)) == 0:
             te = time.time()
@@ -487,8 +513,10 @@ def federated_run(ctx, regime: str, seed: int, method: str, mu: float, run_dir: 
         history.append(row)
         print(f"    {regime} {method} s{seed} r{rnd}: val_f1={row.get('val_macro_f1', float('nan')):.4f} "
               f"held_f1={row.get('held_macro_f1', float('nan')):.4f} ({row['round_wall_s']:.0f}s)", flush=True)
-        if not last and (rnd % int(study.get("checkpoint_every", 1)) == 0 or past_deadline()):
-            save_checkpoint(ck, {"glob": {k: v.cpu() for k, v in glob.items()}, "history": history, "round": rnd})
+        if not last and (rnd % int(study.get("checkpoint_every", 1)) == 0 or past_deadline() or rnd == pause_after):
+            save_checkpoint(ck, {"glob": {k: v.cpu() for k, v in glob.items()}, "history": history, "round": rnd, "support": support})
+        if rnd == pause_after and not last:      # pilot: exercise a genuine pause/resume at full scale
+            raise Paused(str(run_dir))
     te = time.time()
     ct = np.flatnonzero(roles == CLIENT_TEST)
     pred = np.full(len(y), -1, dtype=np.int64)
@@ -695,7 +723,7 @@ def worker(ctx, phase, out: Path, selections=None) -> bool:
         try:
             if kind == "fed":
                 ctx["backend"] = ctx["backends"][ctx["regimes"][reg]["dataset"]]
-                federated_run(ctx, reg, seed, method, mu, d)
+                federated_run(ctx, reg, seed, method, mu, d, eval_test=phase != "tune")   # tuning: validation only
             else:
                 ctx["backend"] = ctx["backends"][reg]
                 centralized_run(ctx, reg, seed, d, ctx["regimes"][ctx["study"]["centralized"][reg]]["partition"])
@@ -706,32 +734,178 @@ def worker(ctx, phase, out: Path, selections=None) -> bool:
     return True
 
 
+PILOT_ROUNDS = 2          # round 1, checkpoint + genuine pause, resume, round 2 (last: validation + held-out)
+PILOT_METHOD, PILOT_MU = "fedprox", 0.01   # FedProx step cost >= FedAvg step cost (extra proximal term)
+CONTINGENCY = 1.2         # allowance for factors the pilot cannot measure (listed in pilot.json "assumptions")
+SESSION_HOURS, DEADLINE_MARGIN_HOURS, STARTUP_HOURS = 11.0, 0.75, 0.5   # launcher budget per Kaggle session
+
+
+def planned_workload(ctx, regime: str, seed: int) -> dict:
+    """Exact training workload of one full run, replaying the deterministic client sampling (no training)."""
+    R = ctx["regimes"][regime]
+    data = ctx["data"][R["dataset"]]
+    clients = make_clients(data, R["partition"], seed)
+    n_train = np.array([int((data["roles"][c] == TRAIN).sum()) for c in clients])
+    eligible = [c for c in range(len(clients)) if n_train[c]]
+    bs, ep = int(R["fl"]["batch_size"]), int(math.ceil(float(R["fl"]["local_epochs"])))
+    steps = picks = 0
+    distinct = set()
+    rounds = int(R["fl"]["rounds"])
+    for rnd in range(1, rounds + 1):
+        sel = select_clients(eligible, float(R["fl"]["fraction_fit"]), int(R["fl"].get("min_fit_clients", 1)), seed, rnd)
+        steps += sum(ep * math.ceil(n_train[c] / bs) for c in sel)
+        picks += len(sel)
+        distinct.update(sel)
+    every = int(ctx["study"].get("eval_val_every", 1))
+    return {"steps": int(steps), "client_updates": int(picks), "distinct_clients": len(distinct), "rounds": rounds,
+            "val_evals": sum(1 for r in range(1, rounds + 1) if r % every == 0 or r == rounds),
+            "held_evals": len({r for r in ctx["study"].get("eval_test_rounds", []) if r <= rounds} | {rounds})}
+
+
+def data_report(ctx) -> dict:
+    rep = {}
+    for ds, d in ctx["data"].items():
+        lens = ctx["tokens"][ds].lengths()
+        rep[ds] = {"verified_against_official_bundle": bool(d["meta"].get("verified_against_bundle")),
+                   "bundle": d["meta"].get("bundle"), "rows": int(len(d["labels"])),
+                   "role_counts": {n: int((d["roles"] == r).sum()) for n, r in
+                                   (("train", TRAIN), ("val", VAL), ("client_test", CLIENT_TEST), ("unseen", UNSEEN))},
+                   "held_out": {"source": "official test split" if d["test_rows"] is None else "unseen-product clients",
+                                "rows": int(len(d["test_labels"]))},
+                   "class_counts": np.bincount(d["labels"], minlength=d["num_classes"]).tolist(),
+                   "tokens_per_review": {"mean": float(lens.mean()), "median": float(np.median(lens)),
+                                         "p95": float(np.percentile(lens, 95)),
+                                         "fraction_truncated_at_max_len": float((lens >= int(ctx["study"]["max_len"])).mean())}}
+    return rep
+
+
 def pilot(ctx, out: Path) -> dict:
-    """One full-scale FedAvg round per regime (seed 42) with one validation and one held-out pass;
-    projects per-run hours on this GPU (train time x rounds + evaluations at the configured checkpoints)."""
-    res = {}
+    """Full-scale timing pilot (never reported as a result): PILOT_ROUNDS rounds per regime on the full data with a
+    genuine checkpoint/pause/resume between rounds, then an exact projection of all planned runs from measured
+    unit costs."""
+    study = ctx["study"]
+    pdir = out / "pilot"
+    pdir.mkdir(parents=True, exist_ok=True)
+    summary = {"purpose": "timing and pipeline pilot; its numbers are never reported as results",
+               "method": {"algorithm": PILOT_METHOD, "mu": PILOT_MU, "seed": 42, "rounds": PILOT_ROUNDS},
+               "environment": environment(), "data": data_report(ctx), "regimes": {}}
+
+    def write():
+        (pdir / "pilot.json").write_text(json.dumps(summary, indent=1, default=str))
+    write()
+    try:
+        import psutil
+        rss = lambda: psutil.Process().memory_info().rss / 2**30
+    except ImportError:
+        rss = lambda: None
     for reg, R in ctx["regimes"].items():
-        ctx["backend"] = ctx["backends"][R["dataset"]]
-        d = out / "pilot" / reg
-        if not (d / "COMPLETE").exists():
-            d.mkdir(parents=True, exist_ok=True)
-            federated_run(ctx, reg, 42, "fedavg", 0.0, d, eval_test=True, max_rounds=1)
-        h = json.loads((d / "history.json").read_text())[0]
+        ctx["backend"] = backend = ctx["backends"][R["dataset"]]
+        d = pdir / reg
+        try:
+            if not (d / "COMPLETE").exists():
+                res = {}
+                if backend.device.startswith("cuda"):
+                    torch.cuda.reset_peak_memory_stats()
+                ck = d / "checkpoint.pt"
+                if not ck.exists():
+                    try:
+                        federated_run(ctx, reg, 42, PILOT_METHOD, PILOT_MU, d, max_rounds=PILOT_ROUNDS, pause_after=1)
+                    except Paused:
+                        pass
+                saved = torch.load(ck, map_location="cpu", weights_only=False)
+                res["checkpoint"] = {"exists_after_pause": True, "round": saved["round"], "size_mb": ck.stat().st_size / 2**20}
+                t = time.time()
+                federated_run(ctx, reg, 42, PILOT_METHOD, PILOT_MU, d, max_rounds=PILOT_ROUNDS)
+                hist = json.loads((d / "history.json").read_text())
+                res["checkpoint"] |= {"resume_wall_s_incl_final_evals": time.time() - t,
+                                      "resumed_and_completed": bool((d / "COMPLETE").exists() and not ck.exists()
+                                                                    and len(hist) == PILOT_ROUNDS
+                                                                    and hist[0] == saved["history"][0])}
+                if backend.device.startswith("cuda"):
+                    res["gpu_peak_memory_gb"] = torch.cuda.max_memory_allocated() / 2**30
+                    res["gpu_total_memory_gb"] = torch.cuda.get_device_properties(0).total_memory / 2**30
+                res["host_rss_gb"] = rss()
+                (d / "pilot_extra.json").write_text(json.dumps(res, indent=1))
+        except Paused:
+            summary["stopped_by_deadline"] = reg
+            write()
+            return summary
+        res = json.loads((d / "pilot_extra.json").read_text())
+        hist = json.loads((d / "history.json").read_text())
         fin = json.loads((d / "final.json").read_text())
-        rounds = int(R["fl"]["rounds"])
-        n_val = math.ceil(rounds / int(ctx["study"].get("eval_val_every", 1)))
-        n_held = len(set(ctx["study"].get("eval_test_rounds", [])) | {rounds})
-        proj = (h["train_wall_s"] * rounds + h["val_wall_s"] * n_val + h["held_wall_s"] * n_held
-                + fin["resources"]["client_test_wall_s"]) / 3600
-        res[reg] = {"train_wall_s_per_round": h["train_wall_s"], "val_wall_s": h["val_wall_s"], "held_wall_s": h["held_wall_s"],
-                    "selected": h["selected"], "client_steps": h["client_steps"], "projected_hours_per_federated_run": proj,
-                    "round1_val_macro_f1": h.get("val_macro_f1"), "gpu": environment()["gpu"]}
-    n_runs = len(ctx["study"]["mu_grid"]) + 2 * len(ctx["study"]["seeds"])
-    summary = {"regimes": res,
-               "projected_federated_gpu_hours_total": sum(v["projected_hours_per_federated_run"] * n_runs for v in res.values()),
-               "note": "excludes centralized runs; assumes every round costs as much as round 1"}
-    (out / "pilot" / "pilot.json").write_text(json.dumps(summary, indent=1))
-    print(json.dumps(summary, indent=1), flush=True)
+        steps = sum(h["client_steps"] for h in hist)
+        step_s = sum(h["step_wall_s"] for h in hist)
+        unit = {"step_s": step_s / steps,
+                "step_s_per_round": [h["step_wall_s"] / h["client_steps"] for h in hist],
+                "client_overhead_s": sum(h["setup_wall_s"] + h["copy_agg_wall_s"] for h in hist) / sum(h["selected"] for h in hist),
+                "support_s_per_new_client": sum(h["support_wall_s"] for h in hist) / max(1, sum(h["new_clients"] for h in hist)),
+                "val_eval_s": hist[-1]["val_wall_s"], "held_eval_s": hist[-1]["held_wall_s"],
+                "client_test_eval_s": fin["resources"]["client_test_wall_s"]}
+        keep = ("round", "selected", "new_clients", "client_steps", "examples", "train_wall_s", "step_wall_s", "setup_wall_s",
+                "copy_agg_wall_s", "support_wall_s", "val_wall_s", "held_wall_s", "round_wall_s")
+        summary["regimes"][reg] = {
+            "measured": {"rounds": [{k: h[k] for k in keep if k in h} for h in hist],
+                         "examples_per_s": sum(h["examples"] for h in hist) / step_s, "steps_per_s": steps / step_s, **res},
+            "unit_costs": unit, "dense_message_mb": fin["communication"]["dense_message_bytes"] / 2**20,
+            "pilot_val_macro_f1_after_2_rounds": fin["val"].get("macro_f1")}
+        write()
+
+    # ------------------------------------------------------------ projection of every planned run
+    runs, tot = [], {"point": 0.0, "low": 0.0, "high": 0.0}
+
+    def add(name, w, u, fixed_s):
+        var = w["steps"] * np.array([u["step_s"], min(u["step_s_per_round"]), max(u["step_s_per_round"])])
+        base = (w.get("client_updates", 0) * u["client_overhead_s"]
+                + w.get("distinct_clients", 0) * u["support_s_per_new_client"] + fixed_s)
+        h = (var + base) / 3600
+        runs.append({"run": name, **w, "hours_point": float(h[0]), "hours_low": float(h[1]), "hours_high": float(h[2])})
+        for k, v in zip(("point", "low", "high"), h):
+            tot[k] += float(v)
+
+    for reg in study["regimes"]:
+        u = summary["regimes"][reg]["unit_costs"]
+        tune_w = planned_workload(ctx, reg, int(study["tuning_seed"]))
+        for mu in study["mu_grid"]:            # tuning runs evaluate validation only
+            add(f"tune/{reg}/fedprox_mu{mu}", tune_w, u, tune_w["val_evals"] * u["val_eval_s"])
+        for seed in study["seeds"]:
+            w = planned_workload(ctx, reg, seed)
+            fixed = w["val_evals"] * u["val_eval_s"] + w["held_evals"] * u["held_eval_s"] + u["client_test_eval_s"]
+            for method in ("fedavg", "fedprox"):
+                add(f"evaluate/{reg}/{method}/seed{seed}", w, u, fixed)
+    for ds, reg in study["centralized"].items():
+        u = summary["regimes"][reg]["unit_costs"]
+        n_train = int((ctx["data"][ds]["roles"] == TRAIN).sum())
+        epochs = int(study["centralized_epochs"])
+        w = {"steps": epochs * math.ceil(n_train / int(study.get("centralized_batch_size", 32)))}
+        fixed = epochs * u["val_eval_s"] + u["held_eval_s"] + u["client_test_eval_s"]
+        for seed in study["seeds"]:
+            add(f"evaluate/centralized_{ds}/seed{seed}", w, u, fixed)
+    gpus = max(1, torch.cuda.device_count())
+    usable = SESSION_HOURS - DEADLINE_MARGIN_HOURS - STARTUP_HOURS
+    high_c = tot["high"] * CONTINGENCY
+    sessions = {"point": math.ceil(tot["point"] / (gpus * usable)), "high_with_contingency": math.ceil(high_c / (gpus * usable))}
+    summary["projection"] = {
+        "planned_runs": len(runs), "gpu_hours": {**tot, "high_with_contingency": high_c},
+        "gpus_per_session": gpus, "usable_hours_per_session": usable, "sessions_estimate": sessions,
+        "kaggle_quota_hours_estimate": {k: v * SESSION_HOURS for k, v in sessions.items()},
+        "longest_run_hours_point": max(r["hours_point"] for r in runs), "runs": runs}
+    summary["assumptions"] = [
+        "Step time is the GPU-synchronized mean over all local mini-batch steps of the pilot rounds (full data, "
+        "clients sampled with seed 42); low/high use the fastest/slowest pilot round.",
+        f"Pilot method is {PILOT_METHOD} (mu {PILOT_MU}); FedAvg steps are assumed no slower (no proximal term).",
+        "Centralized step time is taken equal to the federated step time of the same dataset (same model, batch 32, "
+        "same review-length distribution); not measured separately.",
+        "Evaluation costs are single measurements at the pilot's last round; prediction cost does not depend on the weights.",
+        "Workload (steps, client updates, evaluations) of every planned run is exact: client sampling is replayed.",
+        f"Not measured: slowdown from two workers sharing host CPUs for batching, Kaggle GPU/host variability, model "
+        f"download and cache loading per session; covered only by the x{CONTINGENCY} contingency, a judgement, "
+        "not a measurement.",
+        "Kaggle quota counts session wall time; the session estimate assumes both GPUs stay busy, which fails at the end "
+        "of a phase (tuning must finish before evaluation starts), so one or two more sessions may be needed."]
+    write()
+    brief = {k: v for k, v in summary.items() if k not in ("regimes", "data", "projection")}
+    brief["projection"] = {k: v for k, v in summary["projection"].items() if k != "runs"}
+    print(json.dumps(brief, indent=1, default=str), flush=True)
     return summary
 
 
