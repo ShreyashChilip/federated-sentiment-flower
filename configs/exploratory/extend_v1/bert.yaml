@@ -1,0 +1,26 @@
+# EXPLORATORY DistilBERT study at FULL SCALE (docs/EXTEND_V1_PROTOCOL.md); experiments/distilbert_fl.py on GPU.
+# Same data and regime settings as the TF-IDF+LR benchmark (configs/benchmark.yaml regimes): full Yelp IID and
+# Dirichlet-0.1 (exp0a_tuned.yaml cells) and full Amazon VG natural product clients (exp0b_frozen.yaml).
+# Rounds, client fraction, local epochs, batch size and all seeds come from those configs; only the model and
+# its local optimizer differ. Not part of fedbench_v1.
+results_dir: results/exploratory/extend_v1/bert
+model: distilbert-base-uncased
+max_len: 128                  # tokens per review (truncation); fixed a priori
+regimes:
+  yelp_iid:   {dataset: yelp,   config: exp0a_tuned.yaml,  cell: iid}
+  yelp_dir01: {dataset: yelp,   config: exp0a_tuned.yaml,  cell: label_skew}
+  amazon_vg:  {dataset: amazon, config: exp0b_frozen.yaml, cell: natural}
+centralized:                  # one centralized model per dataset and seed (pooled TRAIN rows); value = regime
+  yelp: yelp_iid              #   whose partition is used for the per-client dispersion of that model
+  amazon: amazon_vg
+lr: 5.0e-5                    # AdamW, standard DistilBERT fine-tuning rate, fixed a priori (not tuned)
+weight_decay: 0.01            # no decay on biases and LayerNorm
+centralized_epochs: 3         # standard fine-tuning length
+centralized_batch_size: 32
+centralized_checkpoint_steps: 5000
+eval_val_every: 5             # seen-client validation every 5 rounds and at the end
+eval_test_rounds: [10, 20, 30, 40, 50]   # held-out (Yelp test / Amazon unseen clients): the LR checkpoints
+checkpoint_every: 1           # round checkpoints (resume across sessions)
+mu_grid: [0.001, 0.01, 0.1]   # FedProx mu, tuned per regime on validation with tuning_seed
+tuning_seed: 7
+seeds: [42, 123, 456]

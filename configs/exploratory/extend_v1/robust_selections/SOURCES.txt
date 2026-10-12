@@ -1,0 +1,3 @@
+Source of each copy (frozen Job 3, commit 3415496):
+  yelp_dir01_dropout, yelp_dir01_noise <- tune_algorithms/yelp_dir01/selected.json
+  yelp_qskew <- tune_algorithms/yelp_iid/selected.json (quantity skew keeps IID labels)

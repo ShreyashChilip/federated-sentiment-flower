@@ -1,0 +1,8 @@
+# EXPLORATORY extension (docs/EXTEND_V1_PROTOCOL.md). Yelp exactly as fedbench_v1 (exp0a_tuned: lr 0.3,
+# wd 1e-6, 100 clients, C 0.25, E 1, 50 rounds) plus extra partition cells. Nothing frozen is changed.
+inherits: ../../exp0a_tuned.yaml
+cells:
+  label_skew_a005: {scheme: dirichlet_client, alpha: 0.05, num_clients: 100}
+  label_skew_a05:  {scheme: dirichlet_client, alpha: 0.5,  num_clients: 100}
+  label_skew_a1:   {scheme: dirichlet_client, alpha: 1.0,  num_clients: 100}
+  quantity_skew:   {scheme: quantity_skew, beta: 0.5, num_clients: 100, min_client_size: 10}

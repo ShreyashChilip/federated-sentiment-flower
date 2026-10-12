@@ -1,0 +1,28 @@
+# EXPLORATORY heterogeneity sweep, Dirichlet cell label_skew_a1 (docs/EXTEND_V1_PROTOCOL.md). One Kaggle CPU session.
+# Client lr/wd inherited from the frozen 0A tuning (done at alpha 0.1); FedProx mu and the FedAdagrad
+# server lr are tuned for THIS alpha on validation (seed 7), exactly as in fedbench_v1.
+benchmark:
+  name: extend_v1_alpha_a1
+  results_dir: results/exploratory/extend_v1/alpha_a1
+  common: {device: cpu, client_threads: 1, eval: {every: 1, full_every: 10}}
+  regimes:
+    yelp_a1:
+      config: exploratory/extend_v1/yelp_cells.yaml
+      cell: label_skew_a1
+      base_tuning: inherited
+  base_grid: {lr: [0.03, 0.1, 0.3], weight_decay: [0.000001, 0.00001, 0.0001]}
+  tuning_seed: 7
+  algorithm_grids:
+    fedavg: {}
+    fedprox: {mu: [0.001, 0.01, 0.1, 1.0]}
+    fedadagrad: {server_lr: [0.01, 0.03, 0.1, 0.3, 1.0]}
+  target_fraction_of_tuned_fedavg: 0.95
+  stages:
+    tune_algorithms:
+      kind: tune_algorithms
+      regimes: [yelp_a1]
+    screening:
+      kind: evaluate
+      seeds: [42, 123, 456]
+      regimes: [yelp_a1]
+      methods: [fedavg, fedprox, fedadagrad]

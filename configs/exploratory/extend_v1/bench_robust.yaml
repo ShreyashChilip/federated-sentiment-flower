@@ -1,0 +1,42 @@
+# EXPLORATORY robustness study (docs/EXTEND_V1_PROTOCOL.md). One Kaggle CPU session. No tuning: the frozen
+# fedbench_v1 selections are reused (copies in robust_selections, sources in SOURCES.txt), and the official
+# seeds are used so that every run is paired with an existing clean run of the same method and seed.
+benchmark:
+  name: extend_v1_robust
+  results_dir: results/exploratory/extend_v1/robust
+  selection_dir: configs/exploratory/extend_v1/robust_selections
+  common: {device: cpu, client_threads: 1, eval: {every: 1, full_every: 10}}
+  regimes:
+    yelp_dir01_dropout:            # Dirichlet-0.1 (official cell); 20% of selected clients drop each round
+      config: exploratory/extend_v1/yelp_cells.yaml
+      cell: label_skew
+      base_tuning: inherited
+    yelp_dir01_noise:              # Dirichlet-0.1 (official cell); 10% of training labels flipped
+      config: exploratory/extend_v1/yelp_cells_noise.yaml
+      cell: label_skew
+      base_tuning: inherited
+    yelp_qskew:                    # IID labels, unequal client sizes (Dirichlet 0.5 over client sizes)
+      config: exploratory/extend_v1/yelp_cells.yaml
+      cell: quantity_skew
+      base_tuning: inherited
+  base_grid: {lr: [0.03, 0.1, 0.3], weight_decay: [0.000001, 0.00001, 0.0001]}
+  tuning_seed: 7
+  algorithm_grids: {fedavg: {}, fedprox: {mu: [0.001, 0.01, 0.1, 1.0]}, fedadagrad: {server_lr: [0.01, 0.03, 0.1, 0.3, 1.0]}}
+  target_fraction_of_tuned_fedavg: 0.95
+  stages:
+    robust_dropout:
+      kind: evaluate
+      seeds: [42, 123, 456]
+      regimes: [yelp_dir01_dropout]
+      methods: [fedavg, fedprox, fedadagrad]
+      overrides: {fl: {dropout_prob: 0.2}}
+    robust_noise:
+      kind: evaluate
+      seeds: [42, 123, 456]
+      regimes: [yelp_dir01_noise]
+      methods: [fedavg, fedprox, fedadagrad]
+    robust_qskew:
+      kind: evaluate
+      seeds: [42, 123, 456]
+      regimes: [yelp_qskew]
+      methods: [fedavg, fedprox, fedadagrad]

@@ -1,0 +1,188 @@
+{
+ "regime": "yelp_dir01",
+ "tuning_seed": 7,
+ "selected_utc": "2026-10-07T19:29:06+00:00",
+ "criterion": "seen-client pooled validation macro-F1, last round; ties -> smaller value",
+ "official": true,
+ "git_commits": [
+  "3415496ee93fbd583f7f0657bcbf7f3648120c36"
+ ],
+ "algorithms": {
+  "fedavg": {
+   "hyperparameters": {},
+   "val_macro_f1": 0.7480309445308495,
+   "on_grid_edge": {},
+   "grid": [
+    {
+     "variant": "reference",
+     "val_macro_f1": 0.7480309445308495,
+     "diverged": false
+    }
+   ]
+  },
+  "fedprox": {
+   "hyperparameters": {
+    "mu": 0.01
+   },
+   "val_macro_f1": 0.7495874611219431,
+   "on_grid_edge": {
+    "mu": false
+   },
+   "grid": [
+    {
+     "variant": "mu0.001",
+     "val_macro_f1": 0.7481768138034105,
+     "diverged": false
+    },
+    {
+     "variant": "mu0.01",
+     "val_macro_f1": 0.7495874611219431,
+     "diverged": false
+    },
+    {
+     "variant": "mu0.1",
+     "val_macro_f1": 0.7062104976388601,
+     "diverged": false
+    },
+    {
+     "variant": "mu1",
+     "val_macro_f1": 0.6378323182167881,
+     "diverged": false
+    }
+   ]
+  },
+  "fednova": {
+   "hyperparameters": {},
+   "val_macro_f1": 0.7471545376487543,
+   "on_grid_edge": {},
+   "grid": [
+    {
+     "variant": "reference",
+     "val_macro_f1": 0.7471545376487543,
+     "diverged": false
+    }
+   ]
+  },
+  "scaffold": {
+   "hyperparameters": {},
+   "val_macro_f1": 0.8898506277303013,
+   "on_grid_edge": {},
+   "grid": [
+    {
+     "variant": "reference",
+     "val_macro_f1": 0.8898506277303013,
+     "diverged": false
+    }
+   ]
+  },
+  "fedadam": {
+   "hyperparameters": {
+    "server_lr": 0.1
+   },
+   "val_macro_f1": 0.9415888610228381,
+   "on_grid_edge": {
+    "server_lr": false
+   },
+   "grid": [
+    {
+     "variant": "server_lr0.01",
+     "val_macro_f1": 0.8916117855449941,
+     "diverged": false
+    },
+    {
+     "variant": "server_lr0.03",
+     "val_macro_f1": 0.926892167467437,
+     "diverged": false
+    },
+    {
+     "variant": "server_lr0.1",
+     "val_macro_f1": 0.9415888610228381,
+     "diverged": false
+    },
+    {
+     "variant": "server_lr0.3",
+     "val_macro_f1": 0.9389411397807694,
+     "diverged": false
+    },
+    {
+     "variant": "server_lr1",
+     "val_macro_f1": 0.9385125899649389,
+     "diverged": false
+    }
+   ]
+  },
+  "fedadagrad": {
+   "hyperparameters": {
+    "server_lr": 1.0
+   },
+   "val_macro_f1": 0.949653268861486,
+   "on_grid_edge": {
+    "server_lr": true
+   },
+   "grid": [
+    {
+     "variant": "server_lr0.01",
+     "val_macro_f1": 0.8842316656829485,
+     "diverged": false
+    },
+    {
+     "variant": "server_lr0.03",
+     "val_macro_f1": 0.9083663750252393,
+     "diverged": false
+    },
+    {
+     "variant": "server_lr0.1",
+     "val_macro_f1": 0.9341681673119931,
+     "diverged": false
+    },
+    {
+     "variant": "server_lr0.3",
+     "val_macro_f1": 0.9454732540064666,
+     "diverged": false
+    },
+    {
+     "variant": "server_lr1",
+     "val_macro_f1": 0.949653268861486,
+     "diverged": false
+    }
+   ]
+  },
+  "fedyogi": {
+   "hyperparameters": {
+    "server_lr": 0.1
+   },
+   "val_macro_f1": 0.9408013505542383,
+   "on_grid_edge": {
+    "server_lr": false
+   },
+   "grid": [
+    {
+     "variant": "server_lr0.01",
+     "val_macro_f1": 0.8906280779574254,
+     "diverged": false
+    },
+    {
+     "variant": "server_lr0.03",
+     "val_macro_f1": 0.926195380785889,
+     "diverged": false
+    },
+    {
+     "variant": "server_lr0.1",
+     "val_macro_f1": 0.9408013505542383,
+     "diverged": false
+    },
+    {
+     "variant": "server_lr0.3",
+     "val_macro_f1": 0.9382935138893675,
+     "diverged": false
+    },
+    {
+     "variant": "server_lr1",
+     "val_macro_f1": 0.9312920246541176,
+     "diverged": false
+    }
+   ]
+  }
+ },
+ "target_val_macro_f1": 0.710629397304307
+}

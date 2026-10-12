@@ -1,0 +1,5 @@
+# Same as yelp_cells.yaml with 10% of TRAIN-role labels flipped per run (seeded; src/partitioning/noise.py).
+# label_noise is part of the data section, so this regime uses its own (otherwise identical) feature bundle.
+inherits: yelp_cells.yaml
+data:
+  label_noise: 0.1
