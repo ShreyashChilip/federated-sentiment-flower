@@ -1,0 +1,58 @@
+# EXPLORATORY confirmation of the frozen round-budget selections on NEW seeds
+# (docs/CONFIRM_V1_PROTOCOL.md). Not part of fedbench_v1; no frozen config, result or selection is changed.
+# Regimes, settings and hyperparameters are those of configs/benchmark.yaml; the algorithm selections
+# are byte-identical copies of the frozen Job 3 selections (SHA256SUMS next to them). No tuning happens here.
+benchmark:
+  name: confirm_v1
+  results_dir: results/exploratory/confirm_v1
+  selection_dir: configs/exploratory/confirm_v1_selections
+  common:
+    device: cpu
+    client_threads: 1
+    eval:
+      every: 1
+      full_every: 10
+  regimes:
+    yelp_iid:
+      config: exp0a_tuned.yaml
+      cell: iid
+      base_tuning: inherited
+    yelp_dir01:
+      config: exp0a_tuned.yaml
+      cell: label_skew
+      base_tuning: inherited
+    amazon_vg:
+      config: exp0b_frozen.yaml
+      cell: natural
+      base_tuning: fedavg_grid
+  base_grid:
+    lr: [0.03, 0.1, 0.3]
+    weight_decay: [0.000001, 0.00001, 0.0001]
+  tuning_seed: 7
+  algorithm_grids:
+    fedavg: {}
+    fedprox: {mu: [0.001, 0.01, 0.1, 1.0]}
+    fednova: {}
+    scaffold: {}
+    fedadam: {server_lr: [0.01, 0.03, 0.1, 0.3, 1.0]}
+    fedadagrad: {server_lr: [0.01, 0.03, 0.1, 0.3, 1.0]}
+    fedyogi: {server_lr: [0.01, 0.03, 0.1, 0.3, 1.0]}
+  target_fraction_of_tuned_fedavg: 0.95
+  stages:
+    # Only the selected configurations and their 50-round references (a 50-round run also
+    # provides the 10..40-round checkpoints, since nothing in training depends on the horizon).
+    confirm_yelp_iid:
+      kind: evaluate
+      seeds: [789, 1001]
+      regimes: [yelp_iid]
+      methods: [fedadam, fedadagrad]
+    confirm_yelp_dir:
+      kind: evaluate
+      seeds: [789, 1001]
+      regimes: [yelp_dir01]
+      methods: [fedadagrad]
+    confirm_amazon:
+      kind: evaluate
+      seeds: [789, 1001]
+      regimes: [amazon_vg]
+      methods: [fedadam, fedyogi]

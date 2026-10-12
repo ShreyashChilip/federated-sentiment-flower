@@ -1,0 +1,188 @@
+{
+ "regime": "amazon_vg",
+ "tuning_seed": 7,
+ "selected_utc": "2026-10-07T19:29:07+00:00",
+ "criterion": "seen-client pooled validation macro-F1, last round; ties -> smaller value",
+ "official": true,
+ "git_commits": [
+  "3415496ee93fbd583f7f0657bcbf7f3648120c36"
+ ],
+ "algorithms": {
+  "fedavg": {
+   "hyperparameters": {},
+   "val_macro_f1": 0.1753405896883874,
+   "on_grid_edge": {},
+   "grid": [
+    {
+     "variant": "reference",
+     "val_macro_f1": 0.1753405896883874,
+     "diverged": false
+    }
+   ]
+  },
+  "fedprox": {
+   "hyperparameters": {
+    "mu": 0.001
+   },
+   "val_macro_f1": 0.17417808132126594,
+   "on_grid_edge": {
+    "mu": true
+   },
+   "grid": [
+    {
+     "variant": "mu0.001",
+     "val_macro_f1": 0.17417808132126594,
+     "diverged": false
+    },
+    {
+     "variant": "mu0.01",
+     "val_macro_f1": 0.1673133218208235,
+     "diverged": false
+    },
+    {
+     "variant": "mu0.1",
+     "val_macro_f1": 0.15278530028177104,
+     "diverged": false
+    },
+    {
+     "variant": "mu1",
+     "val_macro_f1": 0.15278530028177104,
+     "diverged": false
+    }
+   ]
+  },
+  "fednova": {
+   "hyperparameters": {},
+   "val_macro_f1": 0.18329471136518447,
+   "on_grid_edge": {},
+   "grid": [
+    {
+     "variant": "reference",
+     "val_macro_f1": 0.18329471136518447,
+     "diverged": false
+    }
+   ]
+  },
+  "scaffold": {
+   "hyperparameters": {},
+   "val_macro_f1": 0.15278530028177104,
+   "on_grid_edge": {},
+   "grid": [
+    {
+     "variant": "reference",
+     "val_macro_f1": 0.15278530028177104,
+     "diverged": false
+    }
+   ]
+  },
+  "fedadam": {
+   "hyperparameters": {
+    "server_lr": 1.0
+   },
+   "val_macro_f1": 0.5668029080952326,
+   "on_grid_edge": {
+    "server_lr": true
+   },
+   "grid": [
+    {
+     "variant": "server_lr0.01",
+     "val_macro_f1": 0.24719924736102877,
+     "diverged": false
+    },
+    {
+     "variant": "server_lr0.03",
+     "val_macro_f1": 0.3975387700760583,
+     "diverged": false
+    },
+    {
+     "variant": "server_lr0.1",
+     "val_macro_f1": 0.5056225824327442,
+     "diverged": false
+    },
+    {
+     "variant": "server_lr0.3",
+     "val_macro_f1": 0.5535082398783661,
+     "diverged": false
+    },
+    {
+     "variant": "server_lr1",
+     "val_macro_f1": 0.5668029080952326,
+     "diverged": false
+    }
+   ]
+  },
+  "fedadagrad": {
+   "hyperparameters": {
+    "server_lr": 1.0
+   },
+   "val_macro_f1": 0.5610163919364766,
+   "on_grid_edge": {
+    "server_lr": true
+   },
+   "grid": [
+    {
+     "variant": "server_lr0.01",
+     "val_macro_f1": 0.2919314833692622,
+     "diverged": false
+    },
+    {
+     "variant": "server_lr0.03",
+     "val_macro_f1": 0.32048675899771323,
+     "diverged": false
+    },
+    {
+     "variant": "server_lr0.1",
+     "val_macro_f1": 0.411511478896768,
+     "diverged": false
+    },
+    {
+     "variant": "server_lr0.3",
+     "val_macro_f1": 0.5216433338846367,
+     "diverged": false
+    },
+    {
+     "variant": "server_lr1",
+     "val_macro_f1": 0.5610163919364766,
+     "diverged": false
+    }
+   ]
+  },
+  "fedyogi": {
+   "hyperparameters": {
+    "server_lr": 1.0
+   },
+   "val_macro_f1": 0.575170881013902,
+   "on_grid_edge": {
+    "server_lr": true
+   },
+   "grid": [
+    {
+     "variant": "server_lr0.01",
+     "val_macro_f1": 0.24295263312368567,
+     "diverged": false
+    },
+    {
+     "variant": "server_lr0.03",
+     "val_macro_f1": 0.3914937629012347,
+     "diverged": false
+    },
+    {
+     "variant": "server_lr0.1",
+     "val_macro_f1": 0.5049301952587518,
+     "diverged": false
+    },
+    {
+     "variant": "server_lr0.3",
+     "val_macro_f1": 0.5482068064309721,
+     "diverged": false
+    },
+    {
+     "variant": "server_lr1",
+     "val_macro_f1": 0.575170881013902,
+     "diverged": false
+    }
+   ]
+  }
+ },
+ "target_val_macro_f1": 0.16657356020396802
+}

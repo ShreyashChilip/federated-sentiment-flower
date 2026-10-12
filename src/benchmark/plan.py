@@ -43,6 +43,12 @@ def selection_path(bench: dict, kind: str, regime: str) -> Path:
 
 def read_selection(bench: dict, kind: str, regime: str) -> dict:
     path = selection_path(bench, kind, regime)
+    if bench.get("selection_dir"):
+        # EXPLORATORY configs only: read committed copies of frozen selections instead of
+        # selections produced in this config's own results folder (fedbench_v1 never sets this).
+        root = Path(bench["selection_dir"])
+        root = root if root.is_absolute() else PROJECT_ROOT / root
+        path = root / ("tune_base" if kind == "base" else "tune_algorithms") / regime / "selected.json"
     if not path.exists():
         raise MissingSelection(f"{path} does not exist: run the {('tune_base' if kind == 'base' else 'tune_algorithms')} stage first")
     return json.loads(path.read_text(encoding="utf-8"))

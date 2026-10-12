@@ -1,0 +1,68 @@
+{
+ "regime": "amazon_vg",
+ "lr": 0.3,
+ "weight_decay": 1e-06,
+ "val_macro_f1": 0.1753405896883874,
+ "criterion": "seen-client pooled validation macro-F1, last round",
+ "tie_break": [
+  "smaller_lr",
+  "larger_weight_decay"
+ ],
+ "tuning_seed": 7,
+ "on_grid_edge": {
+  "lr": true,
+  "weight_decay": true
+ },
+ "official": true,
+ "git_commits": [
+  "3415496ee93fbd583f7f0657bcbf7f3648120c36"
+ ],
+ "selected_utc": "2026-10-06T19:29:28+00:00",
+ "grid": [
+  {
+   "variant": "lr0.03_weight_decay1e-06",
+   "val_macro_f1": 0.15278530028177104,
+   "diverged": false
+  },
+  {
+   "variant": "lr0.03_weight_decay1e-05",
+   "val_macro_f1": 0.15278530028177104,
+   "diverged": false
+  },
+  {
+   "variant": "lr0.03_weight_decay0.0001",
+   "val_macro_f1": 0.15278530028177104,
+   "diverged": false
+  },
+  {
+   "variant": "lr0.1_weight_decay1e-06",
+   "val_macro_f1": 0.15278530028177104,
+   "diverged": false
+  },
+  {
+   "variant": "lr0.1_weight_decay1e-05",
+   "val_macro_f1": 0.15278530028177104,
+   "diverged": false
+  },
+  {
+   "variant": "lr0.1_weight_decay0.0001",
+   "val_macro_f1": 0.15278530028177104,
+   "diverged": false
+  },
+  {
+   "variant": "lr0.3_weight_decay1e-06",
+   "val_macro_f1": 0.1753405896883874,
+   "diverged": false
+  },
+  {
+   "variant": "lr0.3_weight_decay1e-05",
+   "val_macro_f1": 0.17525814482254998,
+   "diverged": false
+  },
+  {
+   "variant": "lr0.3_weight_decay0.0001",
+   "val_macro_f1": 0.1736896188044886,
+   "diverged": false
+  }
+ ]
+}
