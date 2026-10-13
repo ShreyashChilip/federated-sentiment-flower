@@ -98,3 +98,7 @@ Config `configs/exploratory/extend_v1/bert.yaml`; script `experiments/distilbert
   `notebooks/kaggle_bert.py` now installs every package the DistilBERT script imports (flwr pinned to the
   benchmark's 1.39.0, psutil, huggingface_hub) and checks the imports before any data work. Infrastructure only;
   no study setting changed. The failed attempt produced no result (0 runs) and used about one GPU-minute.
+* 2026-10-13 (after the pilot, before any Study C run): the author decided not to run Study C (DistilBERT). The pilot
+  verified the data pipeline and projected about 250 GPU-hours (302 with allowance) for the 33 runs. No Study C result
+  exists; the manuscript states that the study was specified, piloted and not run. Studies A and B are complete and
+  unaffected.
