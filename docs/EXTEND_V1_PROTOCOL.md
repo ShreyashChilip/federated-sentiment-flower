@@ -94,3 +94,7 @@ Config `configs/exploratory/extend_v1/bert.yaml`; script `experiments/distilbert
   a real pause/resume and to project every planned run exactly; tuning runs no longer read held-out data; the
   support-size cache is stored in checkpoints. No study setting (data, regimes, model, optimizer, rounds, seeds,
   grids, evaluation points) changed.
+* 2026-10-13 (after a pilot attempt that stopped at data preparation, before any training): the GPU launcher
+  `notebooks/kaggle_bert.py` now installs every package the DistilBERT script imports (flwr pinned to the
+  benchmark's 1.39.0, psutil, huggingface_hub) and checks the imports before any data work. Infrastructure only;
+  no study setting changed. The failed attempt produced no result (0 runs) and used about one GPU-minute.

@@ -95,16 +95,23 @@ def restore() -> None:
 
 
 def ensure_packages() -> None:
-    """Use the image's torch/transformers/datasets (mutually compatible); install only what is missing."""
+    """Use the image's torch/transformers/datasets (mutually compatible); install only what is missing.
+    The list covers every third-party import of experiments/distilbert_fl.py and the data loaders it calls
+    (src.strategies.server imports flwr; pinned to the benchmark's version from requirements-kaggle.txt)."""
     missing = []
-    for mod, pkg in (("transformers", "transformers"), ("datasets", "datasets"), ("yaml", "PyYAML"),
-                     ("scipy", "scipy"), ("sklearn", "scikit-learn"), ("pandas", "pandas")):
+    for mod, pkg in (("transformers", "transformers"), ("datasets", "datasets"), ("huggingface_hub", "huggingface_hub"),
+                     ("yaml", "PyYAML"), ("scipy", "scipy"), ("sklearn", "scikit-learn"), ("pandas", "pandas"),
+                     ("psutil", "psutil"), ("flwr", "flwr==1.39.0")):
         try:
             __import__(mod)
         except ImportError:
             missing.append(pkg)
     if missing:
         sh(sys.executable, "-m", "pip", "install", "-q", *missing)
+    # fail fast (before any data work) if the experiment module still cannot be imported
+    sh(sys.executable, "-c", "import sys; sys.path[:0] = ['.', 'experiments']; import distilbert_fl; "
+       "import transformers, flwr, torch; print('imports OK: torch', torch.__version__, '| transformers', "
+       "transformers.__version__, '| flwr', flwr.__version__)", cwd=CODE)
 
 
 def main() -> None:
